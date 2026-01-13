@@ -23,11 +23,15 @@ const getFeatureList = async (req, res) => {
       : project_id;
     const query = { projectId: projectId };
 
-    const total = await Feature.countDocuments(query);
-    const features = await Feature.find(query)
-      .skip(skip)
-      .limit(pageSize)
-      .sort({ createdDate: -1 });
+    // 并行执行总数与列表查询，降低总耗时
+    const [total, features] = await Promise.all([
+      Feature.countDocuments(query),
+      Feature.find(query)
+        .skip(skip)
+        .limit(pageSize)
+        .sort({ createdDate: -1 })
+        .lean()
+    ]);
 
     const featureList = features.map(feature => ({
       id: feature._id.toString(),
@@ -86,7 +90,8 @@ const exportFeatures = async (req, res) => {
       ? new mongoose.Types.ObjectId(project_id)
       : project_id;
     const features = await Feature.find({ projectId: projectId })
-      .sort({ createdDate: -1 });
+      .sort({ createdDate: -1 })
+      .lean();
 
     // 这里应该生成Excel文件，暂时返回文件URL
     // 实际项目中需要使用exceljs生成文件并保存到服务器

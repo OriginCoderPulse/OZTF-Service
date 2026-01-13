@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
 
-const Role = require('../models/Role');
+const Department = require('../models/Department');
 const Permission = require('../models/Permission');
-const RolePermission = require('../models/RolePermission');
+const DepartmentPermission = require('../models/DepartmentPermission');
 const Staff = require('../models/Staff');
 const Project = require('../models/Project');
 const ProjectMember = require('../models/ProjectMember');
@@ -12,7 +12,6 @@ const Bug = require('../models/Bug');
 
 const connectDB = async () => {
     try {
-        // 对密码进行URL编码，处理特殊字符
         const encodedPassword = encodeURIComponent(process.env.DB_PASSWORD);
         const mongoURI = `mongodb://${process.env.DB_USER}:${encodedPassword}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}?authSource=admin`;
 
@@ -42,7 +41,6 @@ const initPermissions = async () => {
     console.log('开始初始化权限数据...');
     await Permission.deleteMany({});
 
-    // 定义权限图标（SVG path数组，支持多个path）
     const permissions = [
         {
             name: 'Home',
@@ -66,10 +64,7 @@ const initPermissions = async () => {
             name: 'Meet',
             order: 4,
             description: '会议',
-            icon: [
-                'M917.333333 814.933333H106.666667c-36.266667 0-64-27.733333-64-64V192c0-36.266667 27.733333-64 64-64h810.666666c36.266667 0 64 27.733333 64 64v558.933333c0 36.266667-27.733333 64-64 64zM106.666667 170.666667c-12.8 0-21.333333 8.533333-21.333334 21.333333v558.933333c0 12.8 8.533333 21.333333 21.333334 21.333334h810.666666c12.8 0 21.333333-8.533333 21.333334-21.333334V192c0-12.8-8.533333-21.333333-21.333334-21.333333H106.666667z',
-                'M512 426.666667c-59.733333 0-106.666667-46.933333-106.666667-106.666667s46.933333-106.666667 106.666667-106.666667 106.666667 46.933333 106.666667 106.666667-46.933333 106.666667-106.666667 106.666667z m0-170.666667c-36.266667 0-64 27.733333-64 64s27.733333 64 64 64 64-27.733333 64-64-27.733333-64-64-64zM682.666667 595.2H341.333333c-6.4 0-12.8-2.133333-17.066666-6.4-4.266667-4.266667-6.4-10.666667-4.266667-17.066667 4.266667-27.733333 21.333333-53.333333 44.8-68.266666 19.2-10.666667 70.4-36.266667 147.2-36.266667 53.333333 0 102.4 12.8 145.066667 36.266667 25.6 14.933333 42.666667 40.533333 44.8 68.266666 0 6.4 0 12.8-4.266667 17.066667-2.133333 4.266667-8.533333 6.4-14.933333 6.4z m-309.333334-42.666667h279.466667c-4.266667-4.266667-8.533333-8.533333-14.933333-12.8-36.266667-19.2-78.933333-29.866667-125.866667-29.866666-66.133333 0-108.8 21.333333-125.866667 29.866666l-12.8 12.8zM746.666667 896H277.333333c-12.8 0-21.333333-8.533333-21.333333-21.333333s8.533333-21.333333 21.333333-21.333334h469.333334c12.8 0 21.333333 8.533333 21.333333 21.333334s-8.533333 21.333333-21.333333 21.333333zM256 704H170.666667c-12.8 0-21.333333-8.533333-21.333334-21.333333s8.533333-21.333333 21.333334-21.333334h85.333333c12.8 0 21.333333 8.533333 21.333333 21.333334s-8.533333 21.333333-21.333333 21.333333zM469.333333 704h-85.333333c-12.8 0-21.333333-8.533333-21.333333-21.333333s8.533333-21.333333 21.333333-21.333334h85.333333c12.8 0 21.333333 8.533333 21.333334 21.333334s-8.533333 21.333333-21.333334 21.333333zM682.666667 704h-85.333334c-12.8 0-21.333333-8.533333-21.333333-21.333333s8.533333-21.333333 21.333333-21.333334h85.333334c12.8 0 21.333333 8.533333 21.333333 21.333334s-8.533333 21.333333-21.333333 21.333333zM874.666667 704h-85.333334c-12.8 0-21.333333-8.533333-21.333333-21.333333s8.533333-21.333333 21.333333-21.333334h85.333334c12.8 0 21.333333 8.533333 21.333333 21.333334s-8.533333 21.333333-21.333333 21.333333z'
-            ]
+            icon: ['M917.333333 814.933333H106.666667c-36.266667 0-64-27.733333-64-64V192c0-36.266667 27.733333-64 64-64h810.666666c36.266667 0 64 27.733333 64 64v558.933333c0 36.266667-27.733333 64-64 64zM106.666667 170.666667c-12.8 0-21.333333 8.533333-21.333334 21.333333v558.933333c0 12.8 8.533333 21.333333 21.333334 21.333334h810.666666c12.8 0 21.333333-8.533333 21.333334-21.333334V192c0-12.8-8.533333-21.333333-21.333334-21.333333H106.666667z']
         },
         {
             name: 'Finance',
@@ -81,22 +76,13 @@ const initPermissions = async () => {
             name: 'Video',
             order: 6,
             description: '视频',
-            icon: [
-                'M445.056 596.096h-92.864a86.976 86.976 0 0 1-86.88-86.88v-128.032a86.976 86.976 0 0 1 86.88-86.88h128.032a86.976 86.976 0 0 1 86.88 86.88v91.936a32 32 0 0 1-64 0v-91.936a22.88 22.88 0 0 0-22.88-22.88h-128.032a22.912 22.912 0 0 0-22.88 22.88v128.032c0 12.608 10.272 22.88 22.88 22.88h92.864a32 32 0 0 1 0 64z',
-                'M575.616 564.096a37.888 37.888 0 1 1-75.776 0 37.888 37.888 0 1 1 75.776 0z',
-                'M537.76 603.968c-21.984 0-39.872-17.888-39.872-39.872s17.888-39.872 39.872-39.872 39.872 17.888 39.872 39.872c0 21.984-17.888 39.872-39.872 39.872z m0-75.744c-19.776 0-35.872 16.096-35.872 35.872s16.096 35.872 35.872 35.872 35.872-16.096 35.872-35.872-16.096-35.872-35.872-35.872z',
-                'M735.232 785.408H105.088a102.176 102.176 0 0 1-102.08-102.048V222.08a102.208 102.208 0 0 1 102.08-102.08h459.776a32 32 0 0 1 0 64H105.088c-20.992 0-38.08 17.088-38.08 38.08v461.28a38.08 38.08 0 0 0 38.08 38.048h630.144c20.992 0 38.08-17.088 38.08-38.048v-139.808a32.032 32.032 0 0 1 46.496-28.544l136.96 69.504-1.632-315.712a32 32 0 0 1 31.84-32.16h0.16a32 32 0 0 1 32 31.84l1.92 368.128a31.936 31.936 0 0 1-46.496 28.704l-137.248-69.632v87.68a102.176 102.176 0 0 1-102.08 102.048z',
-                'M805.28 395.552a32.032 32.032 0 0 1-32-32V222.08c0-20.992-17.088-38.08-38.08-38.08a32 32 0 0 1 0-64 102.208 102.208 0 0 1 102.08 102.08v88.672l135.008-70.464a31.968 31.968 0 1 1 29.6 56.736l-181.792 94.912a31.872 31.872 0 0 1-14.816 3.616zM235.68 904a32 32 0 0 1-24.128-53.024l96.768-111.2a32.032 32.032 0 0 1 48.288 42.016L259.84 892.992a32 32 0 0 1-24.16 10.976zM624.768 904a32 32 0 0 1-24.16-10.976l-100.16-115.072a32 32 0 1 1 48.288-42.016l100.16 115.072a32 32 0 0 1-24.128 53.024z'
-            ]
+            icon: ['M445.056 596.096h-92.864a86.976 86.976 0 0 1-86.88-86.88v-128.032a86.976 86.976 0 0 1 86.88-86.88h128.032a86.976 86.976 0 0 1 86.88 86.88v91.936a32 32 0 0 1-64 0v-91.936a22.88 22.88 0 0 0-22.88-22.88h-128.032a22.912 22.912 0 0 0-22.88 22.88v128.032c0 12.608 10.272 22.88 22.88 22.88h92.864a32 32 0 0 1 0 64z']
         },
         {
             name: 'DashBoard',
             order: 7,
             description: '仪表盘',
-            icon: [
-                'M924.8 385.6c-22.6-53.4-54.9-101.3-96-142.4-41.1-41.1-89-73.4-142.4-96C631.1 123.8 572.5 112 512 112s-119.1 11.8-174.4 35.2c-53.4 22.6-101.3 54.9-142.4 96-41.1 41.1-73.4 89-96 142.4C75.8 440.9 64 499.5 64 560c0 132.7 58.3 257.7 159.9 343.1l1.7 1.4c5.8 4.8 13.1 7.5 20.6 7.5h531.7c7.5 0 14.8-2.7 20.6-7.5l1.7-1.4C901.7 817.7 960 692.7 960 560c0-60.5-11.9-119.1-35.2-174.4zM761.4 836H262.6C184.5 765.5 140 665.6 140 560c0-99.4 38.7-192.8 109-263 70.3-70.3 163.7-109 263-109 99.4 0 192.8 38.7 263 109 70.3 70.3 109 163.7 109 263 0 105.6-44.5 205.5-122.6 276z',
-                'M623.5 421.5c-3.1-3.1-8.2-3.1-11.3 0L527.7 506c-18.7-5-39.4-0.2-54.1 14.5-21.9 21.9-21.9 57.3 0 79.2 21.9 21.9 57.3 21.9 79.2 0 14.7-14.7 19.5-35.4 14.5-54.1l84.5-84.5c3.1-3.1 3.1-8.2 0-11.3l-28.3-28.3zM490 320h44c4.4 0 8-3.6 8-8v-80c0-4.4-3.6-8-8-8h-44c-4.4 0-8 3.6-8 8v80c0 4.4 3.6 8 8 8zM750 538v44c0 4.4 3.6 8 8 8h80c4.4 0 8-3.6 8-8v-44c0-4.4-3.6-8-8-8h-80c-4.4 0-8 3.6-8 8zM762.7 340.8l-31.1-31.1c-3.1-3.1-8.2-3.1-11.3 0l-56.6 56.6c-3.1 3.1-3.1 8.2 0 11.3l31.1 31.1c3.1 3.1 8.2 3.1 11.3 0l56.6-56.6c3.1-3.1 3.1-8.2 0-11.3zM304.1 309.7c-3.1-3.1-8.2-3.1-11.3 0l-31.1 31.1c-3.1 3.1-3.1 8.2 0 11.3l56.6 56.6c3.1 3.1 8.2 3.1 11.3 0l31.1-31.1c3.1-3.1 3.1-8.2 0-11.3l-56.6-56.6zM262 530h-80c-4.4 0-8 3.6-8 8v44c0 4.4 3.6 8 8 8h80c4.4 0 8-3.6 8-8v-44c0-4.4-3.6-8-8-8z'
-            ]
+            icon: ['M924.8 385.6c-22.6-53.4-54.9-101.3-96-142.4-41.1-41.1-89-73.4-142.4-96C631.1 123.8 572.5 112 512 112s-119.1 11.8-174.4 35.2c-53.4 22.6-101.3 54.9-142.4 96-41.1 41.1-73.4 89-96 142.4C75.8 440.9 64 499.5 64 560c0 132.7 58.3 257.7 159.9 343.1l1.7 1.4c5.8 4.8 13.1 7.5 20.6 7.5h531.7c7.5 0 14.8-2.7 20.6-7.5l1.7-1.4C901.7 817.7 960 692.7 960 560c0-60.5-11.9-119.1-35.2-174.4zM761.4 836H262.6C184.5 765.5 140 665.6 140 560c0-99.4 38.7-192.8 109-263 70.3-70.3 163.7-109 263-109 99.4 0 192.8 38.7 263 109 70.3 70.3 109 163.7 109 263 0 105.6-44.5 205.5-122.6 276z']
         }
     ];
 
@@ -105,139 +91,141 @@ const initPermissions = async () => {
     return insertedPermissions;
 };
 
-// 初始化角色数据
-const initRoles = async () => {
-    console.log('开始初始化角色数据...');
-    await Role.deleteMany({});
+// 初始化部门数据
+const initDepartments = async () => {
+    console.log('开始初始化部门数据...');
+    await Department.deleteMany({});
 
-    const roles = [
-        { name: 'Super', description: '超级管理员' },
-        { name: 'Developer', description: '开发人员' },
+    const departments = [
+        { name: 'CEO', description: 'CEO（超级管理员）' },
+        { name: 'Finance', description: '财务部' },
+        { name: 'Technical', description: '技术部' },
         { name: 'RMD', description: '资源管理部' },
-        { name: 'Treasurer', description: '财务' }
+        { name: 'Product', description: '产品部' }
     ];
 
-    const insertedRoles = await Role.insertMany(roles);
-    console.log(`已插入 ${insertedRoles.length} 条角色数据`);
-    return insertedRoles;
+    const insertedDepartments = await Department.insertMany(departments);
+    console.log(`已插入 ${insertedDepartments.length} 条部门数据`);
+    return insertedDepartments;
 };
 
-// 初始化角色权限关联数据
-const initRolePermissions = async (roles, permissions) => {
-    console.log('开始初始化角色权限关联数据...');
-    await RolePermission.deleteMany({});
+// 初始化部门权限关联数据
+const initDepartmentPermissions = async (departments, permissions) => {
+    console.log('开始初始化部门权限关联数据...');
+    await DepartmentPermission.deleteMany({});
 
-    if (!roles || !permissions) {
-        console.log('角色或权限数据不存在，跳过角色权限关联初始化');
+    if (!departments || !permissions) {
+        console.log('部门或权限数据不存在，跳过部门权限关联初始化');
         return;
     }
 
-    // 创建权限名称到_id的映射
     const permissionMap = {};
     permissions.forEach(perm => {
         permissionMap[perm.name] = perm._id;
     });
 
-    // 创建角色名称到_id的映射
-    const roleMap = {};
-    roles.forEach(role => {
-        roleMap[role.name] = role._id;
+    const departmentMap = {};
+    departments.forEach(dept => {
+        departmentMap[dept.name] = dept._id;
     });
 
-    // 定义角色权限映射
-    // RMD: 删除 Finance，保留 [Home, Staff, Meet, DashBoard]
-    // Treasurer: Finance + RMD的其他权限 = [Home, Staff, Meet, Finance, DashBoard]
-    const rolePermissionMapping = {
-        'Super': ['Home', 'Project', 'Staff', 'Meet', 'Finance', 'Video', 'DashBoard'],
-        'Developer': ['Home', 'Project', 'Meet', 'Finance'],
+    const departmentPermissionMapping = {
+        'CEO': ['Home', 'Project', 'Staff', 'Meet', 'Finance', 'Video', 'DashBoard'],
+        'Technical': ['Home', 'Project', 'Meet', 'Finance'],
         'RMD': ['Home', 'Staff', 'Meet', 'DashBoard'],
-        'Treasurer': ['Home', 'Staff', 'Meet', 'Finance', 'DashBoard']
+        'Finance': ['Home', 'Staff', 'Meet', 'Finance', 'DashBoard'],
+        'Product': ['Home', 'Project', 'Meet', 'Finance']
     };
 
-    const rolePermissions = [];
+    const departmentPermissions = [];
 
-    for (const [roleName, permissionNames] of Object.entries(rolePermissionMapping)) {
-        const roleId = roleMap[roleName];
-        if (!roleId) continue;
+    for (const [deptName, permissionNames] of Object.entries(departmentPermissionMapping)) {
+        const deptId = departmentMap[deptName];
+        if (!deptId) continue;
 
         for (const permName of permissionNames) {
             const permissionId = permissionMap[permName];
             if (permissionId) {
-                rolePermissions.push({
-                    roleId,
+                departmentPermissions.push({
+                    departmentId: deptId,
                     permissionId
                 });
             }
         }
     }
 
-    await RolePermission.insertMany(rolePermissions);
-    console.log(`已插入 ${rolePermissions.length} 条角色权限关联数据`);
+    await DepartmentPermission.insertMany(departmentPermissions);
+    console.log(`已插入 ${departmentPermissions.length} 条部门权限关联数据`);
 };
 
-// 初始化员工数据（合并了用户和员工表）
-const initStaff = async (roles) => {
+// 初始化员工数据
+const initStaff = async (departments) => {
     console.log('开始初始化员工数据...');
     await Staff.deleteMany({});
 
-    if (!roles || roles.length === 0) {
-        console.log('角色数据不存在，跳过员工初始化');
+    if (!departments || departments.length === 0) {
+        console.log('部门数据不存在，跳过员工初始化');
         return;
     }
 
-    const departments = ['Technology', 'RMD', 'Finance', 'Product'];
-    const occupations = ['前端开发工程师', '后端开发工程师', '测试工程师', 'UI设计师', '产品经理', '项目经理', '运维工程师', '财务专员', '人事专员'];
+    const departmentOccupationMap = {
+        'CEO': ['CEO'],
+        'Finance': ['ACT'],
+        'Technical': ['FD', 'BD', 'FSD', 'QA', 'DevOps'],
+        'RMD': ['HR', 'HRBP'],
+        'Product': ['PM', 'UI']
+    };
+
+    const deptNames = Object.keys(departmentOccupationMap);
     const statuses = ['Active', 'Probation', 'Inactive'];
     const genders = ['男', '女'];
 
-    // 创建角色名称到_id的映射
-    const roleMap = {};
-    roles.forEach(role => {
-        roleMap[role.name] = role._id;
+    const deptIdMap = {};
+    departments.forEach(dept => {
+        deptIdMap[dept.name] = dept._id;
     });
 
     const staffList = [];
-    for (let i = 1; i <= 50; i++) {
-        const department = departments[Math.floor(Math.random() * departments.length)];
-        const occupation = occupations[Math.floor(Math.random() * occupations.length)];
+
+    // 第一个员工必须是CEO
+    const ceoDeptId = deptIdMap['CEO'];
+    if (ceoDeptId) {
+        staffList.push({
+            name: generateChineseName(),
+            department: ceoDeptId,
+            occupation: 'CEO',
+            status: 'Active',
+            serviceDate: new Date(2020, 0, 1),
+            salary: 50000,
+            gender: genders[Math.floor(Math.random() * genders.length)],
+            age: 35 + Math.floor(Math.random() * 15)
+        });
+    }
+
+    // 生成其他员工（从2开始，因为第1个是CEO）
+    for (let i = 2; i <= 50; i++) {
+        const availableDeptNames = deptNames.filter(d => d !== 'CEO');
+        const deptName = availableDeptNames[Math.floor(Math.random() * availableDeptNames.length)];
+        const availableOccupations = departmentOccupationMap[deptName];
+        const occupation = availableOccupations[Math.floor(Math.random() * availableOccupations.length)];
         const status = statuses[Math.floor(Math.random() * statuses.length)];
         const gender = genders[Math.floor(Math.random() * genders.length)];
         const age = 22 + Math.floor(Math.random() * 20);
         const salary = 5000 + Math.floor(Math.random() * 30000);
         const serviceDate = new Date(2020 + Math.floor(Math.random() * 4), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
 
-        // 分配角色：支持多角色（使用ObjectId）
-        // 前10个：Super
-        // 11-20个：Developer
-        // 21-30个：RMD
-        // 31-40个：Treasurer
-        // 41-45个：RMD + Treasurer（多角色）
-        // 46-50个：Developer + Treasurer（多角色）
-        let roleIds = [];
-        if (i <= 10) {
-            roleIds = [roleMap['Super']];
-        } else if (i <= 20) {
-            roleIds = [roleMap['Developer']];
-        } else if (i <= 30) {
-            roleIds = [roleMap['RMD']];
-        } else if (i <= 40) {
-            roleIds = [roleMap['Treasurer']];
-        } else if (i <= 45) {
-            roleIds = [roleMap['RMD'], roleMap['Treasurer']];
-        } else {
-            roleIds = [roleMap['Developer'], roleMap['Treasurer']];
-        }
+        const deptId = deptIdMap[deptName];
+        if (!deptId) continue;
 
         staffList.push({
             name: generateChineseName(),
-            department,
+            department: deptId,
             occupation,
             status,
             serviceDate,
             salary,
             gender,
-            age,
-            roleIds
+            age
         });
     }
 
@@ -256,29 +244,24 @@ const initProjects = async () => {
         return;
     }
 
-    const priorities = ['Low', 'Medium', 'High', 'Critical'];
-    const statuses = ['Planning', 'InProgress', 'Completed', 'OnHold'];
-    const projectNames = ['电商平台', '移动应用', '管理系统', '数据分析', 'API服务', '前端框架', '后端服务', '数据库优化', '性能提升', '安全加固'];
-
     const projects = [];
-    for (let i = 1; i <= 50; i++) {
+    const projectNames = ['OA系统', 'CRM系统', 'ERP系统', '电商平台', '移动APP', '数据分析平台', '客户管理系统', '财务管理系统'];
+
+    for (let i = 0; i < 10; i++) {
         const manager = staffList[Math.floor(Math.random() * staffList.length)];
-        const startDate = new Date(2024, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
-        const endDate = new Date(startDate);
-        endDate.setMonth(endDate.getMonth() + Math.floor(Math.random() * 12) + 3);
-        const progress = Math.floor(Math.random() * 100);
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
+        const startDate = new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
+        const endDate = new Date(startDate.getTime() + 90 * 24 * 60 * 60 * 1000); // 90天后
 
         projects.push({
-            name: `${projectNames[Math.floor(Math.random() * projectNames.length)]}_${i}`,
-            status,
+            name: `${projectNames[i % projectNames.length]}${i > projectNames.length - 1 ? ` (${Math.floor(i / projectNames.length) + 1})` : ''}`,
             managerId: manager._id,
             managerName: manager.name,
-            description: `项目描述 ${i}`,
             startDate,
             endDate,
-            priority: priorities[Math.floor(Math.random() * priorities.length)],
-            progress
+            priority: ['Low', 'Medium', 'High', 'Critical'][Math.floor(Math.random() * 4)],
+            status: ['Planning', 'InProgress', 'Completed', 'OnHold', 'Cancelled'][Math.floor(Math.random() * 5)],
+            progress: Math.floor(Math.random() * 100),
+            description: `项目描述 ${i + 1}`
         });
     }
 
@@ -287,91 +270,139 @@ const initProjects = async () => {
     return insertedProjects;
 };
 
-// 初始化项目成员数据
-const initProjectMembers = async (projects) => {
-    console.log('开始初始化项目成员数据...');
-    await ProjectMember.deleteMany({});
-
-    if (!projects || projects.length === 0) {
-        console.log('没有可用的项目，跳过项目成员初始化');
-        return;
-    }
-
-    const staffList = await Staff.find({ status: { $in: ['Active', 'Probation'] } });
-    const roles = ['Frontend', 'Backend', 'Tester', 'UI', 'DevOps'];
-
-    const members = [];
-    for (const project of projects) {
-        const memberCount = 3 + Math.floor(Math.random() * 5); // 每个项目3-7个成员
-        const selectedStaff = staffList.sort(() => 0.5 - Math.random()).slice(0, memberCount);
-
-        for (const staff of selectedStaff) {
-            if (staff._id.toString() !== project.managerId.toString()) {
-                members.push({
-                    projectId: project._id,
-                    staffId: staff._id,
-                    name: staff.name,
-                    department: staff.department,
-                    occupation: staff.occupation,
-                    role: roles[Math.floor(Math.random() * roles.length)],
-                    joinDate: new Date(project.startDate.getTime() + Math.floor(Math.random() * 30) * 24 * 60 * 60 * 1000)
-                });
-            }
-        }
-    }
-
-    await ProjectMember.insertMany(members);
-    console.log(`已插入 ${members.length} 条项目成员数据`);
-};
-
 // 初始化功能数据
 const initFeatures = async (projects) => {
     console.log('开始初始化功能数据...');
     await Feature.deleteMany({});
 
     if (!projects || projects.length === 0) {
-        console.log('没有可用的项目，跳过功能初始化');
+        console.log('项目数据不存在，跳过功能初始化');
         return;
     }
 
-    const staffList = await Staff.find({ status: { $in: ['Active', 'Probation'] } });
-    const modules = ['用户模块', '订单模块', '支付模块', '商品模块', '库存模块', '物流模块', '消息模块', '统计模块'];
-    const priorities = ['Low', 'Medium', 'High', 'Critical'];
-    const statuses = ['Todo', 'InProgress', 'Testing', 'Done', 'Cancelled'];
+    const staffList = await Staff.find({ status: { $in: ['Active', 'Probation'] } }).limit(50);
+    if (staffList.length === 0) {
+        console.log('没有可用的员工，跳过功能初始化');
+        return [];
+    }
 
     const features = [];
-    for (const project of projects) {
-        const featureCount = 5 + Math.floor(Math.random() * 10); // 每个项目5-14个功能
-        const projectStaff = staffList.sort(() => 0.5 - Math.random()).slice(0, 5);
 
-        for (let i = 0; i < featureCount; i++) {
-            const assignee = projectStaff[Math.floor(Math.random() * projectStaff.length)];
-            const createdDate = new Date(project.startDate.getTime() + Math.floor(Math.random() * 90) * 24 * 60 * 60 * 1000);
-            const dueDate = new Date(createdDate);
-            dueDate.setDate(dueDate.getDate() + Math.floor(Math.random() * 30) + 7);
+    projects.forEach(project => {
+        // 确保 project 有 _id
+        if (!project || !project._id) {
+            console.log('警告: 项目数据无效，跳过');
+            return;
+        }
+
+        for (let i = 0; i < 5; i++) {
+            const assignee = staffList[Math.floor(Math.random() * staffList.length)];
+            if (!assignee || !assignee._id) {
+                console.log('警告: 员工数据无效，跳过');
+                continue;
+            }
 
             features.push({
-                name: `功能_${project.name}_${i + 1}`,
-                module: modules[Math.floor(Math.random() * modules.length)],
+                projectId: project._id,
+                name: `功能 ${i + 1}`,
+                module: `模块 ${Math.floor(i / 2) + 1}`,
                 description: `功能描述 ${i + 1}`,
-                priority: priorities[Math.floor(Math.random() * priorities.length)],
                 assigneeId: assignee._id,
                 assigneeName: assignee.name,
-                status: statuses[Math.floor(Math.random() * statuses.length)],
-                projectId: project._id,
-                createdDate,
-                estimatedHours: 8 + Math.floor(Math.random() * 40),
-                actualHours: Math.floor(Math.random() * 50),
-                startDate: createdDate,
-                dueDate,
-                completedDate: Math.random() > 0.5 ? new Date(dueDate.getTime() + Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000) : null
+                status: ['Todo', 'InProgress', 'Testing', 'Done', 'Cancelled'][Math.floor(Math.random() * 5)],
+                priority: ['Low', 'Medium', 'High', 'Critical'][Math.floor(Math.random() * 4)],
+                createdDate: new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1)
             });
         }
-    }
+    });
 
     await Feature.insertMany(features);
     console.log(`已插入 ${features.length} 条功能数据`);
     return features;
+};
+
+// 初始化项目成员数据
+const initProjectMembers = async (projects) => {
+    console.log('开始初始化项目成员数据...');
+    await ProjectMember.deleteMany({});
+
+    if (!projects || projects.length === 0) {
+        console.log('项目数据不存在，跳过项目成员初始化');
+        return;
+    }
+
+    const staffList = await Staff.find({ status: { $in: ['Active', 'Probation'] } })
+        .populate('department')
+        .limit(50);
+
+    if (staffList.length === 0) {
+        console.log('没有可用的员工，跳过项目成员初始化');
+        return;
+    }
+
+    // 过滤出可以参与项目的员工（排除CEO）
+    const availableStaff = staffList.filter(staff => {
+        const deptName = staff.department?.name || '';
+        return deptName !== 'CEO';
+    });
+
+    if (availableStaff.length === 0) {
+        console.log('没有可参与项目的员工，跳过项目成员初始化');
+        return;
+    }
+
+    const projectMembers = [];
+    const projectRoles = ['FD', 'BD', 'UI', 'QA', 'DevOps'];
+
+    projects.forEach(project => {
+        if (!project || !project._id) {
+            return;
+        }
+
+        // 每个项目添加 3-6 个成员
+        const memberCount = 3 + Math.floor(Math.random() * 4);
+        const selectedStaff = [];
+
+        // 随机选择不重复的员工
+        while (selectedStaff.length < memberCount && selectedStaff.length < availableStaff.length) {
+            const staff = availableStaff[Math.floor(Math.random() * availableStaff.length)];
+            if (!selectedStaff.find(s => s._id.toString() === staff._id.toString())) {
+                selectedStaff.push(staff);
+            }
+        }
+
+        selectedStaff.forEach((staff, index) => {
+            const deptName = staff.department?.name || '';
+
+            // 根据员工的职位分配项目角色
+            let role = 'FD'; // 默认角色
+            if (staff.occupation === 'FD' || staff.occupation === 'BD' || staff.occupation === 'FSD') {
+                role = staff.occupation === 'BD' ? 'BD' : 'FD';
+            } else if (staff.occupation === 'UI') {
+                role = 'UI';
+            } else if (staff.occupation === 'QA') {
+                role = 'QA';
+            } else if (staff.occupation === 'DevOps') {
+                role = 'DevOps';
+            } else {
+                // 其他职位随机分配项目角色
+                role = projectRoles[Math.floor(Math.random() * projectRoles.length)];
+            }
+
+            projectMembers.push({
+                projectId: project._id,
+                staffId: staff._id,
+                name: staff.name,
+                department: deptName,
+                occupation: staff.occupation,
+                role: role,
+                joinDate: new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1)
+            });
+        });
+    });
+
+    await ProjectMember.insertMany(projectMembers);
+    console.log(`已插入 ${projectMembers.length} 条项目成员数据`);
 };
 
 // 初始化Bug数据
@@ -380,55 +411,47 @@ const initBugs = async (projects, features) => {
     await Bug.deleteMany({});
 
     if (!projects || projects.length === 0) {
-        console.log('没有可用的项目，跳过Bug初始化');
+        console.log('项目数据不存在，跳过Bug初始化');
         return;
     }
 
-    const staffList = await Staff.find({ status: { $in: ['Active', 'Probation'] } });
-    const modules = ['用户模块', '订单模块', '支付模块', '商品模块', '库存模块', '物流模块', '消息模块', '统计模块'];
-    const severities = ['Low', 'Medium', 'High', 'Critical'];
-    const statuses = ['Open', 'Assigned', 'InProgress', 'Resolved', 'Closed', 'Reopened'];
-
+    const staffList = await Staff.find({ status: { $in: ['Active', 'Probation'] } }).limit(50);
     const bugs = [];
-    for (const project of projects) {
-        const bugCount = 3 + Math.floor(Math.random() * 8); // 每个项目3-10个Bug
-        const projectStaff = staffList.sort(() => 0.5 - Math.random()).slice(0, 5);
-        const projectFeatures = features ? features.filter(f => f.projectId.toString() === project._id.toString()) : [];
 
-        for (let i = 0; i < bugCount; i++) {
-            const assignee = projectStaff[Math.floor(Math.random() * projectStaff.length)];
-            const reporter = projectStaff[Math.floor(Math.random() * projectStaff.length)];
-            const createdDate = new Date(project.startDate.getTime() + Math.floor(Math.random() * 90) * 24 * 60 * 60 * 1000);
-            const dueDate = new Date(createdDate);
-            dueDate.setDate(dueDate.getDate() + Math.floor(Math.random() * 15) + 3);
+    projects.forEach(project => {
+        // 确保 project 有 _id
+        if (!project || !project._id) {
+            console.log('警告: 项目数据无效，跳过');
+            return;
+        }
 
-            const feature = projectFeatures.length > 0 ? projectFeatures[Math.floor(Math.random() * projectFeatures.length)] : null;
+        for (let i = 0; i < 3; i++) {
+            const assignee = staffList[Math.floor(Math.random() * staffList.length)];
+            const reporter = staffList[Math.floor(Math.random() * staffList.length)];
+            const relatedFeature = features && features.length > 0 ? features[Math.floor(Math.random() * features.length)] : null;
+
+            if (!assignee || !assignee._id || !reporter || !reporter._id) {
+                console.log('警告: 员工数据无效，跳过');
+                continue;
+            }
 
             bugs.push({
-                name: `Bug_${project.name}_${i + 1}`,
-                module: modules[Math.floor(Math.random() * modules.length)],
+                projectId: project._id,
+                featureId: relatedFeature ? relatedFeature._id : null,
+                featureName: relatedFeature ? relatedFeature.name : null,
+                name: `Bug ${i + 1}`,
+                module: `模块 ${Math.floor(i / 2) + 1}`,
                 description: `Bug描述 ${i + 1}`,
-                severity: severities[Math.floor(Math.random() * severities.length)],
                 assigneeId: assignee._id,
                 assigneeName: assignee.name,
-                status: statuses[Math.floor(Math.random() * statuses.length)],
-                projectId: project._id,
-                featureId: feature ? feature._id : null,
-                featureName: feature ? feature.name : null,
-                createdDate,
                 reportedBy: reporter._id,
                 reportedByName: reporter.name,
-                estimatedHours: 2 + Math.floor(Math.random() * 16),
-                actualHours: Math.floor(Math.random() * 20),
-                dueDate,
-                resolvedDate: Math.random() > 0.3 ? new Date(dueDate.getTime() + Math.floor(Math.random() * 5) * 24 * 60 * 60 * 1000) : null,
-                closedDate: Math.random() > 0.5 ? new Date(dueDate.getTime() + Math.floor(Math.random() * 10) * 24 * 60 * 60 * 1000) : null,
-                stepsToReproduce: `复现步骤 ${i + 1}`,
-                expectedResult: `预期结果 ${i + 1}`,
-                actualResult: `实际结果 ${i + 1}`
+                status: ['Open', 'Assigned', 'InProgress', 'Resolved', 'Closed', 'Reopened'][Math.floor(Math.random() * 6)],
+                severity: ['Low', 'Medium', 'High', 'Critical'][Math.floor(Math.random() * 4)],
+                createdDate: new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1)
             });
         }
-    }
+    });
 
     await Bug.insertMany(bugs);
     console.log(`已插入 ${bugs.length} 条Bug数据`);
@@ -439,18 +462,21 @@ const initDatabase = async () => {
     try {
         await connectDB();
 
-        console.log('开始初始化数据库...\n');
+        console.log('\n========== 开始初始化数据库 ==========\n');
 
-        const permissions = await initPermissions();
-        const roles = await initRoles();
-        await initRolePermissions(roles, permissions);
-        await initStaff(roles); // 初始化员工数据（包含角色信息）
+        const [permissions, departments] = await Promise.all([
+            initPermissions(),
+            initDepartments()
+        ]);
+
+        await initDepartmentPermissions(departments, permissions);
+        await initStaff(departments);
         const projects = await initProjects();
         await initProjectMembers(projects);
         const features = await initFeatures(projects);
         await initBugs(projects, features);
 
-        console.log('\n数据库初始化完成！');
+        console.log('\n========== 数据库初始化完成！ ==========\n');
         process.exit(0);
     } catch (error) {
         console.error('初始化数据库失败:', error);

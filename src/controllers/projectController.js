@@ -20,7 +20,8 @@ const getProjectDetail = async (req, res) => {
         const projectId = mongoose.Types.ObjectId.isValid(project_id)
             ? new mongoose.Types.ObjectId(project_id)
             : project_id;
-        const project = await Project.findById(projectId);
+        // 使用 lean() 减少 Mongoose 文档包装开销
+        const project = await Project.findById(projectId).lean();
         if (!project) {
             return res.status(404).json({
                 meta: {
@@ -30,23 +31,19 @@ const getProjectDetail = async (req, res) => {
             });
         }
 
-        // 获取项目成员
+        // 获取项目成员（lean + 不使用 populate，减少多余查询）
         const members = await ProjectMember.find({ projectId: projectId })
-            .populate('projectId', 'name');
+            .lean();
 
         // 获取成员详细信息
-        const memberDetails = await Promise.all(
-            members.map(async (member) => {
-                return {
-                    staff_id: member.staffId,
+        const memberDetails = members.map(member => ({
+            staff_id: member.staffId.toString(),
                     name: member.name,
                     department: member.department,
                     occupation: member.occupation,
                     role: member.role,
-                    join_date: member.joinDate
-                };
-            })
-        );
+            join_date: member.joinDate ? member.joinDate.toISOString() : null
+        }));
 
         // 判断用户角色
         let userRole = 'Developer'; // 默认角色
@@ -60,13 +57,15 @@ const getProjectDetail = async (req, res) => {
             userRole = 'Manager';
             isProjectManager = true;
         } else {
-            // 检查是否是测试人员（通过职业或项目成员角色）
-            const staff = await Staff.findById(userId);
-            const member = await ProjectMember.findOne({ projectId: projectId, staffId: userId });
+            // 并行检查是否是测试人员（通过职业或项目成员角色）
+            const [staff, member] = await Promise.all([
+                Staff.findById(userId).lean(),
+                ProjectMember.findOne({ projectId: projectId, staffId: userId }).lean()
+            ]);
             
-            if (member && member.role === 'Tester') {
+            if (member && member.role === 'QA') {
                 isTester = true;
-            } else if (staff && staff.occupation && (staff.occupation.includes('测试') || staff.occupation.includes('Tester'))) {
+            } else if (staff && staff.occupation === 'QA') {
                 isTester = true;
             }
         }
@@ -152,15 +151,36 @@ const addProject = async (req, res) => {
                 const staffId = mongoose.Types.ObjectId.isValid(member.staff_id)
                     ? new mongoose.Types.ObjectId(member.staff_id)
                     : member.staff_id;
-                const staff = await Staff.findById(staffId);
-                if (staff) {
+                const staff = await Staff.findById(staffId).populate('department');
+                if (staff && staff.department) {
+                    // 获取部门名称（必须是 ObjectId 引用）
+                    const staffDept = staff.department.name || '';
+                    
+                    // 映射角色：确保使用新的角色代码
+                    let role = member.role || 'FD';
+                    const roleMap = {
+                        'Frontend': 'FD',
+                        'Backend': 'BD',
+                        'Tester': 'QA',
+                        'UI': 'UI',
+                        'DevOps': 'DevOps'
+                    };
+                    if (roleMap[role]) {
+                        role = roleMap[role];
+                    }
+                    
+                    // 验证角色是否在允许的范围内
+                    if (!['FD', 'BD', 'UI', 'QA', 'DevOps'].includes(role)) {
+                        role = 'FD'; // 默认值
+                    }
+                    
                     const projectMember = new ProjectMember({
                         projectId: project._id,
                         staffId: staffId,
                         name: staff.name,
-                        department: staff.department,
+                        department: staffDept,
                         occupation: staff.occupation,
-                        role: member.role || 'Frontend'
+                        role: role
                     });
                     return projectMember.save();
                 }

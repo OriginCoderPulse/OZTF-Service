@@ -1,7 +1,7 @@
 const Staff = require('../models/Staff');
-const Role = require('../models/Role');
+const Department = require('../models/Department');
 const Permission = require('../models/Permission');
-const RolePermission = require('../models/RolePermission');
+const DepartmentPermission = require('../models/DepartmentPermission');
 const Project = require('../models/Project');
 const ProjectMember = require('../models/ProjectMember');
 const mongoose = require('mongoose');
@@ -29,14 +29,24 @@ const validateRequest = (uid) => {
  * 查找并验证员工
  */
 const findAndValidateStaff = async (uid) => {
-    // 尝试使用 ObjectId 查找
-    let staff;
-    if (mongoose.Types.ObjectId.isValid(uid)) {
-        staff = await Staff.findById(uid);
-    } else {
-        // 如果不是有效的 ObjectId，尝试其他查找方式
-        staff = await Staff.findOne({ _id: uid });
+    // 验证 uid 是否为有效的 ObjectId
+    if (!mongoose.Types.ObjectId.isValid(uid)) {
+        return {
+            valid: false,
+            error: {
+                status: 401,
+                meta: {
+                    code: '1024-B01',
+                    message: 'Authentication failed: Invalid user ID format'
+                }
+            }
+        };
     }
+
+    // 查找员工并 populate department
+    const staff = await Staff.findById(uid).populate('department');
+
+    console.log(staff)
 
     if (!staff) {
         return {
@@ -51,88 +61,8 @@ const findAndValidateStaff = async (uid) => {
         };
     }
 
-    // 检查 roleIds 是否存在且有效
-    if (!staff.roleIds || !Array.isArray(staff.roleIds) || staff.roleIds.length === 0) {
-        return {
-            valid: false,
-            error: {
-                status: 401,
-                meta: {
-                    code: '1024-B01',
-                    message: 'Authentication failed: Invalid or expired token'
-                }
-            }
-        };
-    }
-
-    // 处理 roleIds：可能是 ObjectId 或字符串（旧数据格式）
-    let roleIds = staff.roleIds;
-    const firstRoleId = roleIds[0];
-    let roles = [];
-
-    // 检查是否是字符串格式（旧数据，如 "ROLE_000001"）
-    if (typeof firstRoleId === 'string' && !mongoose.Types.ObjectId.isValid(firstRoleId)) {
-        // 旧数据格式：尝试通过角色名称映射查找
-        // 如果 roleId 是 "ROLE_000001" 格式，需要重新初始化数据库
-        // 但为了兼容，我们尝试查找所有角色，然后根据名称匹配
-        console.warn('[Initial] Warning: Staff has string roleIds, attempting to find roles by name mapping');
-
-        // 尝试通过角色名称查找（如果 roleId 格式是 "ROLE_000001"，这不会工作）
-        // 最好的方式是重新初始化数据库
-        const allRoles = await Role.find({});
-        const roleNameMap = {
-            'ROLE_000001': 'Super',
-            'ROLE_000002': 'Developer',
-            'ROLE_000003': 'RMD',
-            'ROLE_000004': 'Treasurer'
-        };
-
-        const roleNames = roleIds.map(id => roleNameMap[id]).filter(Boolean);
-        if (roleNames.length > 0) {
-            roles = await Role.find({ name: { $in: roleNames } });
-        }
-
-        if (roles.length === 0) {
-            return {
-                valid: false,
-                error: {
-                    status: 401,
-                    meta: {
-                        code: '1024-B01',
-                        message: 'Authentication failed: Database needs reinitialization. Please run: npm run init-db'
-                    }
-                }
-            };
-        }
-    } else {
-        // 新数据格式：roleIds 是 ObjectId 数组
-        // 确保 roleIds 是 ObjectId 数组
-        roleIds = roleIds.map(id => {
-            if (typeof id === 'string') {
-                return mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : id;
-            }
-            return id;
-        });
-
-        // 查询角色信息
-        roles = await Role.find({ _id: { $in: roleIds } });
-
-        if (roles.length === 0) {
-            return {
-                valid: false,
-                error: {
-                    status: 401,
-                    meta: {
-                        code: '1024-B01',
-                        message: 'Authentication failed: No valid roles found'
-                    }
-                }
-            };
-        }
-    }
-
-    // 将角色信息附加到 staff 对象
-    staff.roles = roles;
+    // 将部门信息附加到 staff 对象
+    staff.departmentInfo = staff.department;
 
     return { valid: true, staff };
 };
@@ -140,15 +70,15 @@ const findAndValidateStaff = async (uid) => {
 /**
  * 获取员工的所有权限（去重并按order排序）
  */
-const getStaffPermissions = async (roleIds) => {
-    // 获取角色权限关联
-    const rolePermissions = await RolePermission.find({
-        roleId: { $in: roleIds }
+const getStaffPermissions = async (departmentId) => {
+    // 获取部门权限关联
+    const departmentPermissions = await DepartmentPermission.find({
+        departmentId: departmentId
     }).lean();
 
     // 获取所有唯一的权限ID
     const permissionIds = [...new Set(
-        rolePermissions.map(rp => rp.permissionId)
+        departmentPermissions.map(dp => dp.permissionId)
     )];
 
     // 获取权限详情并按order排序
@@ -215,24 +145,30 @@ const getUtilsByOccupation = (occupation, isSuper, isProjectManager) => {
 
     // 根据职业返回不同的utils
     const occupationStr = (occupation || '').toString();
-    const occupationLower = occupationStr.toLowerCase();
 
-    // 开发（前端开发工程师、后端开发工程师）：返回 Manager 和 UI
-    if (occupationStr.includes('开发') || occupationLower.includes('developer') ||
-        occupationLower === 'frontend' || occupationLower === 'backend') {
+    // 开发（FD, BD, FSD）：返回 Manager 和 UI
+    if (['FD', 'BD', 'FSD'].includes(occupationStr)) {
         return [allUtils.Manager, allUtils.UI];
     }
 
-    // 运维（运维工程师）：返回 Manager、UI 和 Ops
-    if (occupationStr.includes('运维') || occupationLower.includes('ops') ||
-        occupationLower === 'devops') {
+    // 运维（DevOps）：返回 Manager、UI 和 Ops
+    if (occupationStr === 'DevOps') {
         return [allUtils.Manager, allUtils.UI, allUtils.Ops];
     }
 
     // UI（UI设计师）：只返回 UI
-    if (occupationStr.includes('UI') || occupationStr.includes('ui') ||
-        occupationStr.includes('设计')) {
+    if (occupationStr === 'UI') {
         return [allUtils.UI];
+    }
+
+    // QA（测试）：返回 Manager 和 UI
+    if (occupationStr === 'QA') {
+        return [allUtils.Manager, allUtils.UI];
+    }
+
+    // PM（产品经理）：返回 Manager 和 UI
+    if (occupationStr === 'PM') {
+        return [allUtils.Manager, allUtils.UI];
     }
 
     // 默认：返回 Manager 和 UI
@@ -263,7 +199,7 @@ const formatProjectForStaff = (project, member, staff) => {
         name: project.name,
         status: project.status,
         isOverdue: project.endDate < new Date() && project.status !== 'Completed',
-        pr: member ? member.role : undefined, // 项目成员角色：Frontend, Backend, Tester, UI, DevOps
+        pr: member ? member.role : undefined, // 项目成员角色：FD, BD, UI, QA, DevOps
         utils: getUtilsByOccupation(staff?.occupation, false, isProjectManager)
     };
 };
@@ -362,17 +298,26 @@ const initial = async (req, res) => {
 
         const { staff } = staffValidation;
 
-        // 获取角色信息（从查询结果中获取）
-        const roles = staff.roles || [];
-        const roleNames = roles.map(role => role.name);
-        const roleIds = roles.map(role => role._id);
+        // 获取部门信息（必须是 ObjectId 引用，已通过 populate 获取）
+        const department = staff.departmentInfo || staff.department;
+        if (!department || !department._id) {
+            return res.status(401).json({
+                meta: {
+                    code: '1024-B01',
+                    message: 'Authentication failed: Invalid department data'
+                }
+            });
+        }
 
-        // 检查是否是Super角色
-        const isSuper = roleNames.includes('Super');
+        const departmentId = department._id;
+        const departmentName = department.name;
+
+        // 检查是否是CEO部门（超级管理员）
+        const isSuper = departmentName === 'CEO';
 
         // 并行获取权限和项目列表
         const [permissions, userProjects] = await Promise.all([
-            getStaffPermissions(roleIds),
+            getStaffPermissions(departmentId),
             getUserProjects(staff, isSuper)
         ]);
 
@@ -393,7 +338,7 @@ const initial = async (req, res) => {
                 message: 'Success'
             },
             data: {
-                roles: roleNames,
+                department: departmentName,
                 permissions: tabItems
             }
         });

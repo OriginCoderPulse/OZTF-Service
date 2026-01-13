@@ -18,16 +18,20 @@ const getBugList = async (req, res) => {
     const pageSize = 13;
     const skip = (page - 1) * pageSize;
 
-    const projectId = mongoose.Types.ObjectId.isValid(project_id) 
-      ? new mongoose.Types.ObjectId(project_id) 
+    const projectId = mongoose.Types.ObjectId.isValid(project_id)
+      ? new mongoose.Types.ObjectId(project_id)
       : project_id;
     const query = { projectId: projectId };
 
-    const total = await Bug.countDocuments(query);
-    const bugs = await Bug.find(query)
-      .skip(skip)
-      .limit(pageSize)
-      .sort({ createdDate: -1 });
+    // 并行执行总数与列表查询，减少整体响应时间
+    const [total, bugs] = await Promise.all([
+      Bug.countDocuments(query),
+      Bug.find(query)
+        .skip(skip)
+        .limit(pageSize)
+        .sort({ createdDate: -1 })
+        .lean()
+    ]);
 
     const bugList = bugs.map(bug => ({
       id: bug._id.toString(),

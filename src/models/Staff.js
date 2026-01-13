@@ -6,12 +6,14 @@ const staffSchema = new mongoose.Schema({
         required: true
     },
     department: {
-        type: String,
-        enum: ['Technology', 'RMD', 'Finance', 'Product'],
-        required: true
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Department',
+        required: true,
+        index: true
     },
     occupation: {
         type: String,
+        enum: ['CEO', 'ACT', 'FD', 'BD', 'FSD', 'QA', 'DevOps', 'HR', 'HRBP', 'PM', 'UI'],
         required: true
     },
     status: {
@@ -36,12 +38,6 @@ const staffSchema = new mongoose.Schema({
         type: Number,
         default: 25
     },
-    roleIds: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Role',
-        required: true,
-        index: true
-    }],
     createdAt: {
         type: Date,
         default: Date.now
@@ -54,8 +50,35 @@ const staffSchema = new mongoose.Schema({
     collection: 'OZTF_STAFF'
 });
 
+// 索引优化：覆盖常用查询条件，提升 staff 列表与统计接口性能
 staffSchema.index({ department: 1 });
 staffSchema.index({ status: 1 });
-staffSchema.index({ roleIds: 1 });
+staffSchema.index({ department: 1, status: 1 });
+staffSchema.index({ serviceDate: 1 });
+staffSchema.index({ salary: 1 });
+staffSchema.index({ gender: 1 });
+
+// 确保只有一个CEO（超级管理员）
+staffSchema.pre('save', async function (next) {
+    if (this.occupation === 'CEO') {
+        // 检查部门是否是CEO部门
+        const Department = mongoose.model('Department');
+        const ceoDept = await Department.findOne({ name: 'CEO' });
+
+        if (ceoDept && this.department.toString() === ceoDept._id.toString()) {
+            // 检查是否已存在其他CEO
+            const existingCeo = await this.constructor.findOne({
+                department: ceoDept._id,
+                occupation: 'CEO',
+                _id: { $ne: this._id }
+            });
+
+            if (existingCeo) {
+                return next(new Error('系统中只能有一个CEO（超级管理员）'));
+            }
+        }
+    }
+    next();
+});
 
 module.exports = mongoose.model('Staff', staffSchema);

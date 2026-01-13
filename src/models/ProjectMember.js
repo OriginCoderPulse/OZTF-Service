@@ -27,7 +27,7 @@ const projectMemberSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['Frontend', 'Backend', 'Tester', 'UI', 'DevOps'],
+        enum: ['FD', 'BD', 'UI', 'QA', 'DevOps'],
         required: true
     },
     joinDate: {

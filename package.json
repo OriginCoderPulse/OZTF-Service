@@ -6,9 +6,18 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "init-db": "node src/scripts/initDatabase.js"
+    "init-db": "node src/scripts/initDatabase.js",
+    "reset-db": "node src/scripts/resetDatabase.js",
+    "reset-and-init": "node src/scripts/resetAndInit.js",
+    "migrate-staff": "node src/scripts/migrateStaffData.js",
+    "migrate-role-to-department": "node src/scripts/migrateRoleToDepartment.js",
+    "cleanup-old-collections": "node src/scripts/cleanupOldCollections.js"
   },
-  "keywords": ["express", "mongodb", "api"],
+  "keywords": [
+    "express",
+    "mongodb",
+    "api"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {

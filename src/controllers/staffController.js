@@ -26,7 +26,12 @@ const getStaffInfo = async (req, res) => {
             query.name = { $regex: name, $options: 'i' };
         }
         if (department) {
-            query.department = department;
+            // department 现在是 ObjectId，需要查找对应的部门
+            const Department = require('../models/Department');
+            const dept = await Department.findOne({ name: department });
+            if (dept) {
+                query.department = dept._id;
+            }
         }
         if (status) {
             query.status = status;
@@ -51,23 +56,47 @@ const getStaffInfo = async (req, res) => {
             };
         }
 
-        const total = await Staff.countDocuments(query);
-        const activeStaff = await Staff.countDocuments({ ...query, status: 'Active' });
-        const probationStaff = await Staff.countDocuments({ ...query, status: 'Probation' });
+        // 并行执行统计和列表查询，减少网络往返，提高响应速度
+        const [
+            total,
+            activeStaff,
+            probationStaff,
+            staffList
+        ] = await Promise.all([
+            Staff.countDocuments(query),
+            Staff.countDocuments({ ...query, status: 'Active' }),
+            Staff.countDocuments({ ...query, status: 'Probation' }),
+            Staff.find(query)
+                .populate('department')
+                .skip(skip)
+                .limit(pageSize)
+                .sort({ createdAt: -1 })
+                .lean()
+        ]);
 
-        const staffList = await Staff.find(query)
-            .skip(skip)
-            .limit(pageSize)
-            .sort({ createdAt: -1 });
+        // 将CEO（超级管理员）排在第一位
+        const sortedStaffList = [...staffList].sort((a, b) => {
+            const aDeptName = a.department?.name || '';
+            const bDeptName = b.department?.name || '';
+            const aIsCeo = aDeptName === 'CEO' && a.occupation === 'CEO';
+            const bIsCeo = bDeptName === 'CEO' && b.occupation === 'CEO';
 
-        const dataList = staffList.map(staff => ({
-            id: staff._id.toString(),
-            name: staff.name,
-            department: staff.department,
-            occupation: staff.occupation,
-            status: staff.status,
-            service_date: staff.serviceDate
-        }));
+            if (aIsCeo && !bIsCeo) return -1;
+            if (!aIsCeo && bIsCeo) return 1;
+            return 0;
+        });
+
+        const dataList = sortedStaffList.map(staff => {
+            const deptName = staff.department?.name || '';
+            return {
+                id: staff._id.toString(),
+                name: staff.name,
+                department: deptName,
+                occupation: staff.occupation,
+                status: staff.status,
+                service_date: staff.serviceDate
+            };
+        });
 
         res.json({
             meta: {
@@ -95,12 +124,22 @@ const getStaffInfo = async (req, res) => {
 // 获取开发人员列表
 const getStaffDevelopers = async (req, res) => {
     try {
+        const Department = require('../models/Department');
+        const technicalDept = await Department.findOne({ name: 'Technical' });
+        const productDept = await Department.findOne({ name: 'Product' });
+
+        const departmentIds = [];
+        if (technicalDept) departmentIds.push(technicalDept._id);
+        if (productDept) departmentIds.push(productDept._id);
+
         const developers = await Staff.find({
-            department: { $in: ['Technology', 'Product'] },
+            department: { $in: departmentIds },
             status: { $in: ['Active', 'Probation'] }
         })
+            .populate('department')
             .select('name occupation department')
-            .sort({ name: 1 });
+            .sort({ name: 1 })
+            .lean();
 
         res.json({
             meta: {
@@ -108,12 +147,15 @@ const getStaffDevelopers = async (req, res) => {
                 message: 'Success'
             },
             data: {
-                developers: developers.map(dev => ({
-                    id: dev._id.toString(),
-                    name: dev.name,
-                    occupation: dev.occupation,
-                    department: dev.department
-                }))
+                developers: developers.map(dev => {
+                    const deptName = dev.department?.name || '';
+                    return {
+                        id: dev._id.toString(),
+                        name: dev.name,
+                        occupation: dev.occupation,
+                        department: deptName
+                    };
+                })
             }
         });
     } catch (error) {
@@ -194,29 +236,34 @@ const getDepartmentStats = async (req, res) => {
     try {
         const { user_id } = req.body;
 
+        const Department = require('../models/Department');
+
+        // 获取所有部门
+        const allDepartments = await Department.find({}).lean();
+        const departmentMap = new Map();
+        allDepartments.forEach(dept => {
+            departmentMap.set(dept._id.toString(), dept.name);
+        });
+
         const stats = await Staff.aggregate([
             {
                 $group: {
                     _id: '$department',
                     count: { $sum: 1 }
                 }
-            },
-            {
-                $project: {
-                    department: '$_id',
-                    count: 1,
-                    _id: 0
-                }
             }
         ]);
 
         const total = stats.reduce((sum, item) => sum + item.count, 0);
 
-        const departments = stats.map(item => ({
-            department: item.department,
-            count: item.count,
-            percentage: total > 0 ? ((item.count / total) * 100).toFixed(2) : 0
-        }));
+        const departments = stats.map(item => {
+            const deptName = departmentMap.get(item._id.toString()) || 'Unknown';
+            return {
+                department: deptName,
+                count: item.count,
+                percentage: total > 0 ? ((item.count / total) * 100).toFixed(2) : 0
+            };
+        });
 
         res.json({
             meta: {
