@@ -30,8 +30,8 @@ const featureSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Todo', 'InProgress', 'Testing', 'Done', 'Cancelled'],
-        default: 'Todo'
+        enum: ['InProgress', 'Testing', 'Done', 'Cancelled'],
+        default: 'InProgress'
     },
     projectId: {
         type: mongoose.Schema.Types.ObjectId,

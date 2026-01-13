@@ -72,55 +72,6 @@ const getFeatureList = async (req, res) => {
   }
 };
 
-// 导出功能列表
-const exportFeatures = async (req, res) => {
-  try {
-    const { project_id, user_id } = req.body;
-
-    if (!project_id || !user_id) {
-      return res.status(400).json({
-        meta: {
-          code: '1024-C01',
-          message: 'Invalid request data: Field validation failed'
-        }
-      });
-    }
-
-    const projectId = mongoose.Types.ObjectId.isValid(project_id)
-      ? new mongoose.Types.ObjectId(project_id)
-      : project_id;
-    const features = await Feature.find({ projectId: projectId })
-      .sort({ createdDate: -1 })
-      .lean();
-
-    // 这里应该生成Excel文件，暂时返回文件URL
-    // 实际项目中需要使用exceljs生成文件并保存到服务器
-    const fileName = `项目功能列表_${Date.now()}.xlsx`;
-    const fileUrl = `/exports/${fileName}`;
-
-    res.json({
-      meta: {
-        code: '1024-S200',
-        message: 'Success'
-      },
-      data: {
-        file_url: fileUrl,
-        file_name: fileName,
-        download_name: `项目功能列表.xlsx`
-      }
-    });
-  } catch (error) {
-    console.error('Export features error:', error);
-    res.status(500).json({
-      meta: {
-        code: '1024-E01',
-        message: 'Network error: Backend service unavailable'
-      }
-    });
-  }
-};
-
 module.exports = {
-  getFeatureList,
-  exportFeatures
+  getFeatureList
 };

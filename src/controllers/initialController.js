@@ -31,6 +31,7 @@ const validateRequest = (uid) => {
 const findAndValidateStaff = async (uid) => {
     // 验证 uid 是否为有效的 ObjectId
     if (!mongoose.Types.ObjectId.isValid(uid)) {
+        console.error(`[Initial] 无效的用户ID格式: ${uid}`);
         return {
             valid: false,
             error: {
@@ -46,9 +47,10 @@ const findAndValidateStaff = async (uid) => {
     // 查找员工并 populate department
     const staff = await Staff.findById(uid).populate('department');
 
-    console.log(staff)
-
     if (!staff) {
+        // 检查数据库中是否有任何员工数据
+        const totalStaff = await Staff.countDocuments();
+        
         return {
             valid: false,
             error: {

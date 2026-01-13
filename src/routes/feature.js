@@ -1,11 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const {
-  getFeatureList,
-  exportFeatures
+  getFeatureList
 } = require('../controllers/featureController');
 
 router.post('/list', getFeatureList);
-router.post('/export', exportFeatures);
 
 module.exports = router;

@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const connectDB = require('./config/database');
 require('dotenv').config();
 
@@ -9,6 +10,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// 静态文件服务
+app.use('/oztf/api/v1/static', express.static(path.join(__dirname, '../public/static')));
 
 // 连接数据库
 connectDB();

@@ -74,15 +74,24 @@ const getStaffInfo = async (req, res) => {
                 .lean()
         ]);
 
-        // 将CEO（超级管理员）排在第一位
+        // 排序逻辑：CEO永远在第一个，离职的放在末尾
         const sortedStaffList = [...staffList].sort((a, b) => {
             const aDeptName = a.department?.name || '';
             const bDeptName = b.department?.name || '';
             const aIsCeo = aDeptName === 'CEO' && a.occupation === 'CEO';
             const bIsCeo = bDeptName === 'CEO' && b.occupation === 'CEO';
+            const aIsInactive = a.status === 'Inactive';
+            const bIsInactive = b.status === 'Inactive';
 
+            // CEO 永远在第一个
             if (aIsCeo && !bIsCeo) return -1;
             if (!aIsCeo && bIsCeo) return 1;
+
+            // 离职的放在末尾
+            if (aIsInactive && !bIsInactive) return 1;
+            if (!aIsInactive && bIsInactive) return -1;
+
+            // 其他保持原有顺序（按创建时间倒序）
             return 0;
         });
 
@@ -122,6 +131,7 @@ const getStaffInfo = async (req, res) => {
 };
 
 // 获取开发人员列表
+// 返回两个列表：1. PM列表 2. 产品部和技术部的人员（不包括PM职位）
 const getStaffDevelopers = async (req, res) => {
     try {
         const Department = require('../models/Department');
@@ -132,14 +142,39 @@ const getStaffDevelopers = async (req, res) => {
         if (technicalDept) departmentIds.push(technicalDept._id);
         if (productDept) departmentIds.push(productDept._id);
 
-        const developers = await Staff.find({
-            department: { $in: departmentIds },
-            status: { $in: ['Active', 'Probation'] }
-        })
-            .populate('department')
-            .select('name occupation department')
-            .sort({ name: 1 })
-            .lean();
+        // 并行查询PM列表和开发人员列表
+        const [pmList, developers] = await Promise.all([
+            // 查询所有PM
+            Staff.find({
+                occupation: 'PM',
+                status: { $in: ['Active', 'Probation'] }
+            })
+                .populate('department')
+                .select('name occupation department')
+                .sort({ name: 1 })
+                .lean(),
+            // 查询产品部和技术部的人员（排除PM职位）
+            Staff.find({
+                department: { $in: departmentIds },
+                occupation: { $ne: 'PM' },
+                status: { $in: ['Active', 'Probation'] }
+            })
+                .populate('department')
+                .select('name occupation department')
+                .sort({ name: 1 })
+                .lean()
+        ]);
+
+        // 格式化数据
+        const formatStaff = (staff) => {
+            const deptName = staff.department?.name || '';
+            return {
+                id: staff._id.toString(),
+                name: staff.name,
+                occupation: staff.occupation,
+                department: deptName
+            };
+        };
 
         res.json({
             meta: {
@@ -147,15 +182,8 @@ const getStaffDevelopers = async (req, res) => {
                 message: 'Success'
             },
             data: {
-                developers: developers.map(dev => {
-                    const deptName = dev.department?.name || '';
-                    return {
-                        id: dev._id.toString(),
-                        name: dev.name,
-                        occupation: dev.occupation,
-                        department: deptName
-                    };
-                })
+                pmList: pmList.map(formatStaff),
+                developers: developers.map(formatStaff)
             }
         });
     } catch (error) {
