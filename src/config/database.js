@@ -13,9 +13,11 @@ const connectDB = async () => {
     });
     
     console.log('MongoDB 连接成功');
+    return Promise.resolve();
   } catch (error) {
     console.error('MongoDB 连接失败:', error);
     process.exit(1);
+    return Promise.reject(error);
   }
 };
 

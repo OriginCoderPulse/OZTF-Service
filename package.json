@@ -5,14 +5,7 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
-    "init-db": "node src/scripts/initDatabase.js",
-    "reset-db": "node src/scripts/resetDatabase.js",
-    "reset-and-init": "node src/scripts/resetAndInit.js",
-    "rebuild-db": "node src/scripts/rebuildDatabase.js",
-    "migrate-staff": "node src/scripts/migrateStaffData.js",
-    "migrate-role-to-department": "node src/scripts/migrateRoleToDepartment.js",
-    "cleanup-old-collections": "node src/scripts/cleanupOldCollections.js"
+    "dev": "nodemon src/app.js"
   },
   "keywords": [
     "express",
