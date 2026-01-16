@@ -7,6 +7,10 @@ require('dotenv').config();
 
 const app = express();
 
+// 信任代理（用于正确获取客户端真实 IP）
+// 如果部署在 Nginx 等反向代理后面，需要设置这个
+app.set('trust proxy', true);
+
 // 中间件
 app.use(cors());
 app.use(express.json());

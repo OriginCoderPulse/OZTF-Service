@@ -9,21 +9,21 @@ const { addMeetingToPendingList, removeMeetingFromPendingList } = require('../ut
 const generateMeetId = async () => {
     let meetId;
     let isUnique = false;
-    
+
     while (!isUnique) {
         // 生成随机ID：xxx-xxxx-xxxx
         const part1 = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
         const part2 = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
         const part3 = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
         meetId = `${part1}-${part2}-${part3}`;
-        
+
         // 检查是否已存在
         const existing = await MeetRoom.findOne({ meetId });
         if (!existing) {
             isUnique = true;
         }
     }
-    
+
     return meetId;
 };
 
@@ -83,7 +83,8 @@ const createRoom = async (req, res) => {
             });
         }
 
-        // 验证 innerParticipants 是否为数组
+        // 验证 innerParticipants 是否为数组（创建会议时，innerParticipants 仍然是 ObjectId 数组，用于预选参会人）
+        // 实际加入会议时，会通过 addInnerParticipant 接口添加为对象格式
         let participantsArray = [];
         if (innerParticipants) {
             if (!Array.isArray(innerParticipants)) {
@@ -94,10 +95,14 @@ const createRoom = async (req, res) => {
                     }
                 });
             }
-            // 验证数组中的每个元素是否为有效的 ObjectId
+            // 验证数组中的每个元素是否为有效的 ObjectId，并转换为对象格式
             participantsArray = innerParticipants.filter(id => {
                 return mongoose.Types.ObjectId.isValid(id);
-            }).map(id => new mongoose.Types.ObjectId(id));
+            }).map(id => ({
+                participantId: new mongoose.Types.ObjectId(id),
+                device: 'unknown',
+                joinTime: new Date()
+            }));
         }
 
         // 生成唯一的 meetId
@@ -139,14 +144,18 @@ const createRoom = async (req, res) => {
                 topic: meetRoom.topic,
                 description: meetRoom.description,
                 organizerId: meetRoom.organizerId.toString(),
-                startTime: meetRoom.startTime instanceof Date 
-                    ? meetRoom.startTime.toISOString() 
+                startTime: meetRoom.startTime instanceof Date
+                    ? meetRoom.startTime.toISOString()
                     : new Date(meetRoom.startTime).toISOString(),
                 duration: meetRoom.duration,
                 status: meetRoom.status,
-                innerParticipants: meetRoom.innerParticipants.map(id => id.toString()),
-                createdAt: meetRoom.createdAt instanceof Date 
-                    ? meetRoom.createdAt.toISOString() 
+                innerParticipants: meetRoom.innerParticipants.map(p => ({
+                    participantId: p.participantId.toString(),
+                    device: p.device,
+                    joinTime: p.joinTime instanceof Date ? p.joinTime.toISOString() : new Date(p.joinTime).toISOString()
+                })),
+                createdAt: meetRoom.createdAt instanceof Date
+                    ? meetRoom.createdAt.toISOString()
                     : new Date(meetRoom.createdAt).toISOString()
             }
         });
@@ -221,7 +230,7 @@ const getRoom = async (req, res) => {
                     {
                         $or: [
                             { organizerId: userObjectId },
-                            { innerParticipants: userObjectId }
+                            { 'innerParticipants.participantId': userObjectId }
                         ]
                     },
                     {
@@ -240,15 +249,15 @@ const getRoom = async (req, res) => {
             // 先按状态排序：InProgress = 0, Pending = 1
             const statusOrder = { 'InProgress': 0, 'Pending': 1 };
             const statusDiff = statusOrder[a.status] - statusOrder[b.status];
-            
+
             if (statusDiff !== 0) {
                 return statusDiff;
             }
-            
+
             // 状态相同时，按开始时间排序（距离当前时间近的在前）
             const timeA = new Date(a.startTime).getTime();
             const timeB = new Date(b.startTime).getTime();
-            
+
             if (a.status === 'InProgress') {
                 // 进行中的会议：开始时间越接近现在（开始得越晚）的排在前面（降序）
                 return timeB - timeA;
@@ -269,8 +278,8 @@ const getRoom = async (req, res) => {
                     name: meeting.organizerId.name,
                     occupation: meeting.organizerId.occupation
                 },
-                startTime: meeting.startTime instanceof Date 
-                    ? meeting.startTime.toISOString() 
+                startTime: meeting.startTime instanceof Date
+                    ? meeting.startTime.toISOString()
                     : new Date(meeting.startTime).toISOString(),
                 duration: meeting.duration,
                 status: meeting.status
@@ -432,8 +441,628 @@ const statusChange = async (req, res) => {
     }
 };
 
+/**
+ * 生成18位随机字母数字ID
+ * @returns {string} 18位随机ID
+ */
+function generateParticipantId() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    for (let i = 0; i < 18; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+/**
+ * 删除外部参会人（根据 participantId）
+ */
+const removeOutParticipant = async (req, res) => {
+    try {
+        const { meetId, participantId } = req.body;
+
+        // 参数验证
+        if (!meetId) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid request data: Missing meetId'
+                }
+            });
+        }
+
+        if (!participantId) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid request data: Missing participantId'
+                }
+            });
+        }
+
+        // 查找会议
+        const meeting = await MeetRoom.findOne({ meetId });
+        if (!meeting) {
+            return res.status(404).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Meeting not found'
+                }
+            });
+        }
+
+        // 删除该 participantId 对应的参会人
+        const initialLength = meeting.outParticipants.length;
+        meeting.outParticipants = meeting.outParticipants.filter(p => {
+            // 兼容旧数据格式（字符串）和新格式（对象）
+            if (typeof p === 'string') {
+                try {
+                    const pData = JSON.parse(p);
+                    // 兼容旧格式的 ip 字段
+                    return pData.participantId !== participantId && pData.ip !== participantId;
+                } catch {
+                    return true; // 解析失败，保留
+                }
+            } else {
+                // 新格式：检查 participantId，兼容旧格式的 ip 字段
+                return (p.participantId && p.participantId !== participantId) &&
+                    (!p.ip || p.ip !== participantId);
+            }
+        });
+
+        // 如果有删除，更新数据库
+        if (meeting.outParticipants.length !== initialLength) {
+            meeting.updatedAt = new Date();
+            await meeting.save();
+        }
+
+        res.json({
+            meta: {
+                code: '1024-S200',
+                message: 'Success'
+            },
+            data: {
+                meetId: meeting.meetId,
+                participantCount: meeting.outParticipants.length,
+                removed: initialLength - meeting.outParticipants.length > 0
+            }
+        });
+    } catch (error) {
+        console.error('Remove out participant error:', error);
+        res.status(500).json({
+            meta: {
+                code: '1024-E01',
+                message: 'Network error: Backend service unavailable'
+            }
+        });
+    }
+};
+
+/**
+ * 添加外部参会人
+ * 前端生成 18 位唯一 ID，后端直接使用
+ */
+const addOutParticipant = async (req, res) => {
+    try {
+        const { meetId, participantId, participantInfo } = req.body;
+
+        // 参数验证
+        if (!meetId) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid request data: Missing meetId'
+                }
+            });
+        }
+
+        if (!participantId) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid request data: Missing participantId'
+                }
+            });
+        }
+
+        // 验证 participantId 格式（18位字母数字）
+        if (typeof participantId !== 'string' || participantId.length !== 18 || !/^[a-zA-Z0-9]{18}$/.test(participantId)) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid participantId: must be 18 characters alphanumeric'
+                }
+            });
+        }
+
+        // 解析参会人信息（可能是 JSON 字符串）
+        let participantData = {};
+        if (participantInfo) {
+            try {
+                participantData = typeof participantInfo === 'string'
+                    ? JSON.parse(participantInfo)
+                    : participantInfo;
+            } catch (parseError) {
+                // 如果解析失败，使用默认值
+                console.warn('解析参会人信息失败，使用默认值:', parseError);
+            }
+        }
+
+        // 查找会议
+        const meeting = await MeetRoom.findOne({ meetId });
+        if (!meeting) {
+            return res.status(404).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Meeting not found'
+                }
+            });
+        }
+
+        // 检查该 participantId 是否已存在
+        const existingParticipant = meeting.outParticipants.find(p => {
+            if (typeof p === 'string') {
+                try {
+                    const pData = JSON.parse(p);
+                    return pData.participantId === participantId || pData.ip === participantId;
+                } catch {
+                    return false;
+                }
+            } else {
+                return (p.participantId && p.participantId === participantId) ||
+                    (p.ip && p.ip === participantId);
+            }
+        });
+
+        // 构建参会人信息对象
+        const participantObject = {
+            participantId: participantId,
+            name: participantData.name || '匿名用户',
+            device: participantData.device || 'unknown',
+            joinTime: participantData.joinTime ? new Date(participantData.joinTime) : new Date()
+        };
+
+        if (existingParticipant) {
+            // 如果已存在，更新信息
+            const index = meeting.outParticipants.findIndex(p => {
+                if (typeof p === 'string') {
+                    try {
+                        const pData = JSON.parse(p);
+                        return pData.participantId === participantId || pData.ip === participantId;
+                    } catch {
+                        return false;
+                    }
+                } else {
+                    return (p.participantId && p.participantId === participantId) ||
+                        (p.ip && p.ip === participantId);
+                }
+            });
+            if (index !== -1) {
+                meeting.outParticipants[index] = participantObject;
+            }
+        } else {
+            // 如果不存在，添加新的参会人
+            meeting.outParticipants.push(participantObject);
+        }
+
+        meeting.updatedAt = new Date();
+        await meeting.save();
+
+        res.json({
+            meta: {
+                code: '1024-S200',
+                message: 'Success'
+            },
+            data: {
+                meetId: meeting.meetId,
+                participantId: participantId,
+                participantCount: meeting.outParticipants.length
+            }
+        });
+    } catch (error) {
+        console.error('Add out participant error:', error);
+        res.status(500).json({
+            meta: {
+                code: '1024-E01',
+                message: 'Network error: Backend service unavailable'
+            }
+        });
+    }
+};
+
+/**
+ * 添加内部参会人
+ */
+const addInnerParticipant = async (req, res) => {
+    try {
+        const { meetId, participantId, participantInfo } = req.body;
+
+        // 参数验证
+        if (!meetId || !participantId) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid request data: Missing meetId or participantId'
+                }
+            });
+        }
+
+        // 验证 participantId 是否为有效的 ObjectId
+        if (!mongoose.Types.ObjectId.isValid(participantId)) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid participantId format'
+                }
+            });
+        }
+
+        // 解析参会人信息（可能是 JSON 字符串）
+        let participantData = {};
+        if (participantInfo) {
+            try {
+                participantData = typeof participantInfo === 'string'
+                    ? JSON.parse(participantInfo)
+                    : participantInfo;
+            } catch (parseError) {
+                console.warn('解析参会人信息失败，使用默认值:', parseError);
+            }
+        }
+
+        // 先检查会议是否存在
+        const existingMeeting = await MeetRoom.findOne({ meetId });
+        if (!existingMeeting) {
+            return res.status(404).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Meeting not found'
+                }
+            });
+        }
+
+        // 检查该参会人是否已经存在
+        const existingParticipant = existingMeeting.innerParticipants.find(
+            p => p.participantId.toString() === participantId
+        );
+
+        let meeting;
+        if (existingParticipant) {
+            // 如果已存在，使用 $set 更新信息
+            meeting = await MeetRoom.findOneAndUpdate(
+                {
+                    meetId,
+                    'innerParticipants.participantId': new mongoose.Types.ObjectId(participantId)
+                },
+                {
+                    $set: {
+                        'innerParticipants.$.device': participantData.device || existingParticipant.device || 'unknown',
+                        'innerParticipants.$.joinTime': participantData.joinTime
+                            ? new Date(participantData.joinTime)
+                            : existingParticipant.joinTime || new Date(),
+                        updatedAt: new Date()
+                    }
+                },
+                {
+                    new: true,
+                    runValidators: true
+                }
+            );
+        } else {
+            // 如果不存在，使用 $push 添加新的参会人
+            meeting = await MeetRoom.findOneAndUpdate(
+                { meetId },
+                {
+                    $push: {
+                        innerParticipants: {
+                            participantId: new mongoose.Types.ObjectId(participantId),
+                            device: participantData.device || 'unknown',
+                            joinTime: participantData.joinTime ? new Date(participantData.joinTime) : new Date()
+                        }
+                    },
+                    $set: {
+                        updatedAt: new Date()
+                    }
+                },
+                {
+                    new: true,
+                    runValidators: true
+                }
+            );
+        }
+
+        res.json({
+            meta: {
+                code: '1024-S200',
+                message: 'Success'
+            },
+            data: {
+                meetId: meeting.meetId,
+                participantId: participantId,
+                participantCount: meeting.innerParticipants.length
+            }
+        });
+    } catch (error) {
+        console.error('Add inner participant error:', error);
+        res.status(500).json({
+            meta: {
+                code: '1024-E01',
+                message: 'Network error: Backend service unavailable'
+            }
+        });
+    }
+};
+
+/**
+ * 删除内部参会人
+ */
+const removeInnerParticipant = async (req, res) => {
+    try {
+        const { meetId, participantId } = req.body;
+
+        // 参数验证
+        if (!meetId || !participantId) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid request data: Missing meetId or participantId'
+                }
+            });
+        }
+
+        // 验证 participantId 是否为有效的 ObjectId
+        if (!mongoose.Types.ObjectId.isValid(participantId)) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid participantId format'
+                }
+            });
+        }
+
+        // 使用 findOneAndUpdate 原子性地删除参会人，避免版本冲突
+        const meeting = await MeetRoom.findOneAndUpdate(
+            { meetId },
+            {
+                $pull: {
+                    innerParticipants: {
+                        participantId: new mongoose.Types.ObjectId(participantId)
+                    }
+                },
+                $set: {
+                    updatedAt: new Date()
+                }
+            },
+            {
+                new: true, // 返回更新后的文档
+                runValidators: true
+            }
+        );
+
+        if (!meeting) {
+            return res.status(404).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Meeting not found'
+                }
+            });
+        }
+
+        res.json({
+            meta: {
+                code: '1024-S200',
+                message: 'Success'
+            },
+            data: {
+                meetId: meeting.meetId,
+                participantId: participantId,
+                participantCount: meeting.innerParticipants.length
+            }
+        });
+    } catch (error) {
+        console.error('Remove inner participant error:', error);
+        res.status(500).json({
+            meta: {
+                code: '1024-E01',
+                message: 'Network error: Backend service unavailable'
+            }
+        });
+    }
+};
+
+/**
+ * 获取会议的所有参会人（内部和外部）
+ */
+const getMeetingParticipants = async (req, res) => {
+    try {
+        let { meetId } = req.body;
+
+        if (!meetId) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid request data: Missing meetId'
+                }
+            });
+        }
+
+        // 去除前后空格并验证格式
+        meetId = typeof meetId === 'string' ? meetId.trim() : String(meetId).trim();
+
+        if (!meetId) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid request data: meetId cannot be empty'
+                }
+            });
+        }
+
+        // 查找会议并填充内部参会人的用户信息
+        const meeting = await MeetRoom.findOne({ meetId })
+            .populate('innerParticipants.participantId', 'name occupation')
+            .lean();
+
+        if (!meeting) {
+            return res.status(404).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Meeting not found'
+                }
+            });
+        }
+
+        // 格式化内部参会人数据
+        const innerParticipants = meeting.innerParticipants.map(p => {
+            // 处理 populate 后的 participantId（可能是对象或 ObjectId）
+            let participantIdStr;
+            let participantName = '未知用户';
+            let participantOccupation = '';
+
+            if (p.participantId && typeof p.participantId === 'object') {
+                // 如果被 populate，participantId 是一个对象
+                if (p.participantId._id) {
+                    participantIdStr = p.participantId._id.toString();
+                } else {
+                    participantIdStr = p.participantId.toString();
+                }
+                participantName = p.participantId.name || participantName;
+                participantOccupation = p.participantId.occupation || participantOccupation;
+            } else {
+                // 如果没有被 populate，participantId 是 ObjectId
+                participantIdStr = p.participantId.toString();
+            }
+
+            return {
+                participantId: participantIdStr,
+                name: participantName,
+                occupation: participantOccupation,
+                device: p.device || 'unknown',
+                joinTime: p.joinTime instanceof Date
+                    ? p.joinTime.toISOString()
+                    : new Date(p.joinTime).toISOString(),
+                type: 'inner' // 标记为内部参会人
+            };
+        });
+
+        // 格式化外部参会人数据
+        const outParticipants = meeting.outParticipants.map(p => ({
+            participantId: p.participantId,
+            name: p.name || '匿名用户',
+            occupation: '',
+            device: p.device || 'unknown',
+            joinTime: p.joinTime instanceof Date
+                ? p.joinTime.toISOString()
+                : new Date(p.joinTime).toISOString(),
+            type: 'out' // 标记为外部参会人
+        }));
+
+        res.json({
+            meta: {
+                code: '1024-S200',
+                message: 'Success'
+            },
+            data: {
+                meetId: meeting.meetId,
+                innerParticipants,
+                outParticipants,
+                totalCount: innerParticipants.length + outParticipants.length
+            }
+        });
+    } catch (error) {
+        console.error('Get meeting participants error:', error);
+        res.status(500).json({
+            meta: {
+                code: '1024-E01',
+                message: 'Network error: Backend service unavailable'
+            }
+        });
+    }
+};
+
+/**
+ * 根据 meetId 获取单个会议信息（用于外部访问）
+ */
+const getMeetingByMeetId = async (req, res) => {
+    try {
+        let { meetId } = req.body;
+
+        if (!meetId) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid request data: Missing meetId'
+                }
+            });
+        }
+
+        // 去除前后空格并验证格式
+        meetId = typeof meetId === 'string' ? meetId.trim() : String(meetId).trim();
+
+        if (!meetId) {
+            return res.status(400).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Invalid request data: meetId cannot be empty'
+                }
+            });
+        }
+
+        // 添加调试日志
+        console.log('查询会议，meetId:', meetId);
+
+        const meeting = await MeetRoom.findOne({ meetId })
+            .populate('organizerId', 'name occupation')
+            .lean();
+
+        if (!meeting) {
+            console.log('会议未找到，meetId:', meetId);
+            // 尝试查找所有会议，用于调试
+            const allMeetings = await MeetRoom.find({}).select('meetId').lean();
+            console.log('数据库中所有会议的meetId:', allMeetings.map(m => m.meetId));
+
+            return res.status(404).json({
+                meta: {
+                    code: '1024-C01',
+                    message: 'Meeting not found'
+                }
+            });
+        }
+
+        res.json({
+            meta: {
+                code: '1024-S200',
+                message: 'Success'
+            },
+            data: {
+                meetId: meeting.meetId,
+                topic: meeting.topic,
+                description: meeting.description,
+                status: meeting.status,
+                startTime: meeting.startTime instanceof Date
+                    ? meeting.startTime.toISOString()
+                    : new Date(meeting.startTime).toISOString(),
+                duration: meeting.duration
+            }
+        });
+    } catch (error) {
+        console.error('Get meeting by meetId error:', error);
+        res.status(500).json({
+            meta: {
+                code: '1024-E01',
+                message: 'Network error: Backend service unavailable'
+            }
+        });
+    }
+};
+
 module.exports = {
     createRoom,
     getRoom,
-    statusChange
+    statusChange,
+    addOutParticipant,
+    removeOutParticipant,
+    addInnerParticipant,
+    removeInnerParticipant,
+    getMeetingParticipants,
+    getMeetingByMeetId
 };

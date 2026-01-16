@@ -41,12 +41,43 @@ const meetRoomSchema = new mongoose.Schema({
         index: true
     },
     innerParticipants: {
-        type: [mongoose.Schema.Types.ObjectId],
-        ref: 'Staff',
+        type: [{
+            participantId: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'Staff',
+                required: true
+            },
+            device: {
+                type: String,
+                default: 'unknown'
+            },
+            joinTime: {
+                type: Date,
+                required: true
+            }
+        }],
         default: []
     },
     outParticipants: {
-        type: [String], // 外部参会人数组（存储字符串，如姓名、邮箱等）
+        type: [{
+            participantId: {
+                type: String,
+                required: true,
+                unique: false // 在数组内不唯一，但在整个会议中应该唯一
+            },
+            name: {
+                type: String,
+                required: true
+            },
+            device: {
+                type: String,
+                default: 'unknown'
+            },
+            joinTime: {
+                type: Date,
+                required: true
+            }
+        }],
         default: []
     },
     createdAt: {
@@ -67,7 +98,7 @@ meetRoomSchema.index({ startTime: 1, status: 1 });
 meetRoomSchema.index({ 'innerParticipants': 1 });
 
 // 更新 updatedAt 字段
-meetRoomSchema.pre('save', function(next) {
+meetRoomSchema.pre('save', function (next) {
     this.updatedAt = new Date();
     next();
 });
