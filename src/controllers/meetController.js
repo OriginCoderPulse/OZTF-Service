@@ -622,6 +622,7 @@ const addOutParticipant = async (req, res) => {
             joinTime: participantData.joinTime ? new Date(participantData.joinTime) : new Date()
         };
 
+
         if (existingParticipant) {
             // 如果已存在，更新信息
             const index = meeting.outParticipants.findIndex(p => {
@@ -963,6 +964,7 @@ const getMeetingParticipants = async (req, res) => {
             },
             data: {
                 meetId: meeting.meetId,
+                organizerId: meeting.organizerId ? meeting.organizerId.toString() : null,
                 innerParticipants,
                 outParticipants,
                 totalCount: innerParticipants.length + outParticipants.length
