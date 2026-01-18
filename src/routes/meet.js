@@ -8,7 +8,7 @@ const {
     removeOutParticipant,
     addInnerParticipant,
     removeInnerParticipant,
-    getMeetingParticipants,
+    getRoomProperties,
     getMeetingByMeetId
 } = require('../controllers/meetController');
 
@@ -19,7 +19,7 @@ router.post('/add-out-participant', addOutParticipant);
 router.post('/remove-out-participant', removeOutParticipant);
 router.post('/add-inner-participant', addInnerParticipant);
 router.post('/remove-inner-participant', removeInnerParticipant);
-router.post('/get-meeting-participants', getMeetingParticipants);
+router.post('/get-room-properties', getRoomProperties);
 router.post('/get-meeting-by-meetid', getMeetingByMeetId);
 
 module.exports = router;

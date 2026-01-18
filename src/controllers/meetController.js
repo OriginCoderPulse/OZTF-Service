@@ -881,7 +881,7 @@ const removeInnerParticipant = async (req, res) => {
 /**
  * 获取会议的所有参会人（内部和外部）
  */
-const getMeetingParticipants = async (req, res) => {
+const getRoomProperties = async (req, res) => {
     try {
         let { meetId } = req.body;
 
@@ -972,6 +972,11 @@ const getMeetingParticipants = async (req, res) => {
             },
             data: {
                 meetId: meeting.meetId,
+                topic: meeting.topic || '',
+                duration: meeting.duration || 0,
+                startTime: meeting.startTime instanceof Date
+                    ? meeting.startTime.toISOString()
+                    : (meeting.startTime ? new Date(meeting.startTime).toISOString() : ''),
                 organizerId: meeting.organizerId ? meeting.organizerId.toString() : null,
                 innerParticipants,
                 outParticipants,
@@ -979,7 +984,7 @@ const getMeetingParticipants = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Get meeting participants error:', error);
+        console.error('Get room properties error:', error);
         res.status(500).json({
             meta: {
                 code: '1024-E01',
@@ -1073,6 +1078,6 @@ module.exports = {
     removeOutParticipant,
     addInnerParticipant,
     removeInnerParticipant,
-    getMeetingParticipants,
+    getRoomProperties,
     getMeetingByMeetId
 };
