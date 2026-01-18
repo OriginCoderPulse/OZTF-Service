@@ -1,5 +1,5 @@
-const Bug = require('../models/Bug');
-const mongoose = require('mongoose');
+const Bug = require("../models/Bug");
+const mongoose = require("mongoose");
 
 // 获取Bug列表
 const getBugList = async (req, res) => {
@@ -9,9 +9,9 @@ const getBugList = async (req, res) => {
     if (!project_id || !user_id) {
       return res.status(400).json({
         meta: {
-          code: '1024-C01',
-          message: 'Invalid request data: Field validation failed'
-        }
+          code: "1024-C01",
+          message: "Invalid request data: Field validation failed",
+        },
       });
     }
 
@@ -26,14 +26,10 @@ const getBugList = async (req, res) => {
     // 并行执行总数与列表查询，减少整体响应时间
     const [total, bugs] = await Promise.all([
       Bug.countDocuments(query),
-      Bug.find(query)
-        .skip(skip)
-        .limit(pageSize)
-        .sort({ createdDate: -1 })
-        .lean()
+      Bug.find(query).skip(skip).limit(pageSize).sort({ createdDate: -1 }).lean(),
     ]);
 
-    const bugList = bugs.map(bug => ({
+    const bugList = bugs.map((bug) => ({
       id: bug._id.toString(),
       name: bug.name,
       module: bug.module,
@@ -55,30 +51,30 @@ const getBugList = async (req, res) => {
       closed_date: bug.closedDate,
       steps_to_reproduce: bug.stepsToReproduce,
       expected_result: bug.expectedResult,
-      actual_result: bug.actualResult
+      actual_result: bug.actualResult,
     }));
 
     res.json({
       meta: {
-        code: '1024-S200',
-        message: 'Success'
+        code: "1024-S200",
+        message: "Success",
       },
       data: {
         bugs: bugList,
-        total
-      }
+        total,
+      },
     });
   } catch (error) {
-    console.error('Get bug list error:', error);
+    console.error("Get bug list error:", error);
     res.status(500).json({
       meta: {
-        code: '1024-E01',
-        message: 'Network error: Backend service unavailable'
-      }
+        code: "1024-E01",
+        message: "Network error: Backend service unavailable",
+      },
     });
   }
 };
 
 module.exports = {
-  getBugList
+  getBugList,
 };

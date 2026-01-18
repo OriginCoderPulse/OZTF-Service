@@ -1,7 +1,7 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { getBugList } = require('../controllers/bugController');
+const { getBugList } = require("../controllers/bugController");
 
-router.post('/list', getBugList);
+router.post("/list", getBugList);
 
 module.exports = router;

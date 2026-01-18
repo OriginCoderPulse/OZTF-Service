@@ -1,9 +1,7 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const {
-  getFeatureList
-} = require('../controllers/featureController');
+const { getFeatureList } = require("../controllers/featureController");
 
-router.post('/list', getFeatureList);
+router.post("/list", getFeatureList);
 
 module.exports = router;

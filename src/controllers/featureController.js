@@ -1,5 +1,5 @@
-const Feature = require('../models/Feature');
-const mongoose = require('mongoose');
+const Feature = require("../models/Feature");
+const mongoose = require("mongoose");
 
 // 获取功能列表
 const getFeatureList = async (req, res) => {
@@ -9,9 +9,9 @@ const getFeatureList = async (req, res) => {
     if (!project_id || !user_id) {
       return res.status(400).json({
         meta: {
-          code: '1024-C01',
-          message: 'Invalid request data: Field validation failed'
-        }
+          code: "1024-C01",
+          message: "Invalid request data: Field validation failed",
+        },
       });
     }
 
@@ -26,14 +26,10 @@ const getFeatureList = async (req, res) => {
     // 并行执行总数与列表查询，降低总耗时
     const [total, features] = await Promise.all([
       Feature.countDocuments(query),
-      Feature.find(query)
-        .skip(skip)
-        .limit(pageSize)
-        .sort({ createdDate: -1 })
-        .lean()
+      Feature.find(query).skip(skip).limit(pageSize).sort({ createdDate: -1 }).lean(),
     ]);
 
-    const featureList = features.map(feature => ({
+    const featureList = features.map((feature) => ({
       id: feature._id.toString(),
       name: feature.name,
       module: feature.module,
@@ -48,30 +44,30 @@ const getFeatureList = async (req, res) => {
       actual_hours: feature.actualHours,
       start_date: feature.startDate,
       due_date: feature.dueDate,
-      completed_date: feature.completedDate
+      completed_date: feature.completedDate,
     }));
 
     res.json({
       meta: {
-        code: '1024-S200',
-        message: 'Success'
+        code: "1024-S200",
+        message: "Success",
       },
       data: {
         features: featureList,
-        total
-      }
+        total,
+      },
     });
   } catch (error) {
-    console.error('Get feature list error:', error);
+    console.error("Get feature list error:", error);
     res.status(500).json({
       meta: {
-        code: '1024-E01',
-        message: 'Network error: Backend service unavailable'
-      }
+        code: "1024-E01",
+        message: "Network error: Backend service unavailable",
+      },
     });
   }
 };
 
 module.exports = {
-  getFeatureList
+  getFeatureList,
 };

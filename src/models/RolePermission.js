@@ -1,26 +1,29 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const rolePermissionSchema = new mongoose.Schema({
-  roleId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Role',
-    required: true,
-    index: true
+const rolePermissionSchema = new mongoose.Schema(
+  {
+    roleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Role",
+      required: true,
+      index: true,
+    },
+    permissionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Permission",
+      required: true,
+      index: true,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
-  permissionId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Permission',
-    required: true,
-    index: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
+  {
+    collection: "OZTF_ROLE_PERMISSIONS",
   }
-}, {
-  collection: 'OZTF_ROLE_PERMISSIONS'
-});
+);
 
 rolePermissionSchema.index({ roleId: 1, permissionId: 1 }, { unique: true });
 
-module.exports = mongoose.model('RolePermission', rolePermissionSchema);
+module.exports = mongoose.model("RolePermission", rolePermissionSchema);

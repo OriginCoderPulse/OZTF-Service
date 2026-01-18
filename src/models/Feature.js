@@ -1,79 +1,82 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const featureSchema = new mongoose.Schema({
+const featureSchema = new mongoose.Schema(
+  {
     name: {
-        type: String,
-        required: true
+      type: String,
+      required: true,
     },
     module: {
-        type: String,
-        required: true
+      type: String,
+      required: true,
     },
     description: {
-        type: String,
-        default: ''
+      type: String,
+      default: "",
     },
     priority: {
-        type: String,
-        enum: ['Low', 'Medium', 'High', 'Critical'],
-        default: 'Medium'
+      type: String,
+      enum: ["Low", "Medium", "High", "Critical"],
+      default: "Medium",
     },
     assigneeId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Staff',
-        required: true,
-        index: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Staff",
+      required: true,
+      index: true,
     },
     assigneeName: {
-        type: String,
-        required: true
+      type: String,
+      required: true,
     },
     status: {
-        type: String,
-        enum: ['InProgress', 'Testing', 'Done', 'Cancelled'],
-        default: 'InProgress'
+      type: String,
+      enum: ["InProgress", "Testing", "Done", "Cancelled"],
+      default: "InProgress",
     },
     projectId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Project',
-        required: true,
-        index: true
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Project",
+      required: true,
+      index: true,
     },
     createdDate: {
-        type: Date,
-        default: Date.now
+      type: Date,
+      default: Date.now,
     },
     estimatedHours: {
-        type: Number,
-        default: 0
+      type: Number,
+      default: 0,
     },
     actualHours: {
-        type: Number,
-        default: 0
+      type: Number,
+      default: 0,
     },
     startDate: {
-        type: Date
+      type: Date,
     },
     dueDate: {
-        type: Date
+      type: Date,
     },
     completedDate: {
-        type: Date
+      type: Date,
     },
     createdAt: {
-        type: Date,
-        default: Date.now
+      type: Date,
+      default: Date.now,
     },
     updatedAt: {
-        type: Date,
-        default: Date.now
-    }
-}, {
-    collection: 'OZTF_FEATURES'
-});
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    collection: "OZTF_FEATURES",
+  }
+);
 
 featureSchema.index({ projectId: 1 });
 featureSchema.index({ assigneeId: 1 });
 featureSchema.index({ status: 1 });
 
-module.exports = mongoose.model('Feature', featureSchema);
+module.exports = mongoose.model("Feature", featureSchema);
