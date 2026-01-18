@@ -5,6 +5,55 @@ const connectDB = require("./config/database");
 const { initializeScheduledTasks } = require("./utils/meetStatusScheduler");
 require("dotenv").config();
 
+// 验证必要的环境变量
+function validateEnvironmentVariables() {
+  const requiredVars = [
+    "DB_HOST",
+    "DB_PORT",
+    "DB_NAME",
+    "DB_USER",
+    "DB_PASSWORD",
+    "TRTC_APP_ID",
+    "TRTC_SECRET_KEY",
+  ];
+
+  const missingVars = [];
+  const invalidVars = [];
+
+  requiredVars.forEach((varName) => {
+    if (!process.env[varName]) {
+      missingVars.push(varName);
+    }
+  });
+
+  // 验证 TRTC_APP_ID 是否为有效数字
+  if (process.env.TRTC_APP_ID && isNaN(Number(process.env.TRTC_APP_ID))) {
+    invalidVars.push("TRTC_APP_ID (must be a number)");
+  }
+
+  if (missingVars.length > 0) {
+    console.error("❌ 缺少必要的环境变量:");
+    missingVars.forEach((varName) => {
+      console.error(`   - ${varName}`);
+    });
+    console.error("\n请检查 .env 文件配置。");
+    process.exit(1);
+  }
+
+  if (invalidVars.length > 0) {
+    console.error("❌ 环境变量格式错误:");
+    invalidVars.forEach((varName) => {
+      console.error(`   - ${varName}`);
+    });
+    process.exit(1);
+  }
+
+  console.log("✅ 环境变量验证通过");
+}
+
+// 启动时验证环境变量
+validateEnvironmentVariables();
+
 const app = express();
 
 // 信任代理（用于正确获取客户端真实 IP）

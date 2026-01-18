@@ -20,7 +20,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "exceljs": "^4.4.0",
-    "moment": "^2.29.4"
+    "moment": "^2.29.4",
+    "pako": "^2.1.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

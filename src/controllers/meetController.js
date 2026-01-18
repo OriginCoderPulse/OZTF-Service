@@ -5,6 +5,7 @@ const {
   addMeetingToPendingList,
   removeMeetingFromPendingList,
 } = require("../utils/meetStatusScheduler");
+const { generateUserSig } = require("../utils/generateUserSig");
 
 /**
  * 生成唯一的会议ID，格式：xxx-xxxx-xxxx
@@ -1053,6 +1054,101 @@ const getMeetingByMeetId = async (req, res) => {
   }
 };
 
+/**
+ * 生成 UserSig
+ */
+const generateUserSigForMeeting = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    // 参数验证
+    if (!userId || typeof userId !== "string") {
+      return res.status(400).json({
+        meta: {
+          code: "1024-E02",
+          message: "Invalid parameter: userId is required",
+        },
+      });
+    }
+
+    // 从环境变量获取 TRTC 配置
+    const sdkAppId = Number(process.env.TRTC_APP_ID);
+    const secretKey = process.env.TRTC_SECRET_KEY;
+
+    // 详细的配置检查
+    if (!process.env.TRTC_APP_ID) {
+      console.error("[GenerateUserSig] TRTC_APP_ID is not configured in environment variables");
+      return res.status(500).json({
+        meta: {
+          code: "1024-E01",
+          message: "TRTC configuration is missing: TRTC_APP_ID is not set. Please configure it in .env file.",
+        },
+      });
+    }
+
+    if (!process.env.TRTC_SECRET_KEY) {
+      console.error("[GenerateUserSig] TRTC_SECRET_KEY is not configured in environment variables");
+      return res.status(500).json({
+        meta: {
+          code: "1024-E01",
+          message: "TRTC configuration is missing: TRTC_SECRET_KEY is not set. Please configure it in .env file.",
+        },
+      });
+    }
+
+    if (!sdkAppId || isNaN(sdkAppId)) {
+      console.error("[GenerateUserSig] TRTC_APP_ID is invalid:", process.env.TRTC_APP_ID);
+      return res.status(500).json({
+        meta: {
+          code: "1024-E01",
+          message: "TRTC configuration is invalid: TRTC_APP_ID must be a valid number.",
+        },
+      });
+    }
+
+    if (!secretKey || typeof secretKey !== "string" || secretKey.trim() === "") {
+      console.error("[GenerateUserSig] TRTC_SECRET_KEY is invalid");
+      return res.status(500).json({
+        meta: {
+          code: "1024-E01",
+          message: "TRTC configuration is invalid: TRTC_SECRET_KEY must be a non-empty string.",
+        },
+      });
+    }
+
+    // 生成 UserSig
+    const result = generateUserSig(sdkAppId, userId, secretKey);
+
+    if (!result.userSig) {
+      return res.status(500).json({
+        meta: {
+          code: "1024-E01",
+          message: "Failed to generate UserSig",
+        },
+      });
+    }
+
+    res.json({
+      meta: {
+        code: "1024-S200",
+        message: "Success",
+      },
+      data: {
+        sdkAppId: result.sdkAppId,
+        userSig: result.userSig,
+      },
+    });
+  } catch (error) {
+    console.error("[GenerateUserSig] Error:", error);
+    res.status(500).json({
+      meta: {
+        code: "1024-E01",
+        message: "Network error: Backend service unavailable",
+      },
+    });
+  }
+};
+
 module.exports = {
   createRoom,
   getRoom,
@@ -1063,4 +1159,5 @@ module.exports = {
   removeInnerParticipant,
   getRoomProperties,
   getMeetingByMeetId,
+  generateUserSigForMeeting,
 };

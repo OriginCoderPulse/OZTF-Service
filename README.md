@@ -72,7 +72,8 @@ OZTF-Service/
 │   │   ├── bug.js
 │   │   └── meet.js
 │   ├── utils/                # 工具函数
-│   │   └── meetStatusScheduler.js  # 会议状态定时任务
+│   │   ├── meetStatusScheduler.js  # 会议状态定时任务
+│   │   └── generateUserSig.js     # UserSig 生成工具
 │   └── public/               # 静态资源
 │       ├── static/           # 静态文件
 │       └── temp/             # 临时文件
@@ -105,9 +106,49 @@ DB_PASSWORD=OZTF1024@
 # 服务配置
 PORT=1024
 NODE_ENV=development
+
+# TRTC 配置（用于生成 UserSig）
+# 请从腾讯云 TRTC 控制台获取：https://console.cloud.tencent.com/trtc
+# 应用管理 -> 应用信息 -> SDKAppID 和 密钥
+TRTC_APP_ID=你的TRTC_APP_ID
+TRTC_SECRET_KEY=你的TRTC_SECRET_KEY
 ```
 
-### 3. 初始化数据库
+**⚠️ 重要提示**：
+- `TRTC_APP_ID` 必须是数字类型（不要加引号）
+- `TRTC_SECRET_KEY` 必须是字符串类型（不需要加引号，除非值中包含特殊字符）
+- 如果环境变量未配置，服务启动时会自动检测并提示错误
+- 如果配置错误，生成 UserSig 接口会返回详细的错误信息
+- **如果遇到配置问题，请参考 `CONFIG_GUIDE.md` 文件**
+
+**🔧 快速修复**：
+如果遇到 "TRTC configuration is missing" 错误，请在 `.env` 文件中添加：
+```env
+TRTC_APP_ID=你的TRTC_APP_ID
+TRTC_SECRET_KEY=你的TRTC_SECRET_KEY
+```
+然后重启服务。
+
+### 3. 验证环境变量
+
+服务启动时会自动验证所有必要的环境变量。如果缺少或格式错误，服务将无法启动并显示详细的错误信息。
+
+**验证通过示例**：
+```
+✅ 环境变量验证通过
+服务器运行在端口 1024
+```
+
+**验证失败示例**：
+```
+❌ 缺少必要的环境变量:
+   - TRTC_APP_ID
+   - TRTC_SECRET_KEY
+
+请检查 .env 文件配置。
+```
+
+### 4. 初始化数据库
 
 运行初始化脚本，为每个表插入测试数据：
 
@@ -115,7 +156,7 @@ NODE_ENV=development
 npm run init-db
 ```
 
-### 4. 启动服务
+### 5. 启动服务
 
 **开发模式**（使用 nodemon，支持热重载）：
 
@@ -150,6 +191,8 @@ curl http://localhost:1024/health
 | `DB_PASSWORD` | 数据库密码 | ✅ | - |
 | `PORT` | 服务端口 | ❌ | 1024 |
 | `NODE_ENV` | 运行环境 | ❌ | development |
+| `TRTC_APP_ID` | TRTC SDK AppID | ✅ | - |
+| `TRTC_SECRET_KEY` | TRTC SecretKey | ✅ | - |
 
 ## API 接口文档
 
@@ -388,6 +431,37 @@ curl http://localhost:1024/health
   "trtcId": "TRTC用户ID"
 }
 ```
+
+##### 6.4 生成 UserSig
+
+**路径**：`POST /oztf/api/v1/meet/generate-usersig`
+
+**功能**：为指定用户生成 TRTC UserSig
+
+**请求参数**：
+
+```json
+{
+  "userId": "用户ID"
+}
+```
+
+**响应示例**：
+
+```json
+{
+  "meta": {
+    "code": "1024-S200",
+    "message": "Success"
+  },
+  "data": {
+    "sdkAppId": 1600122280,
+    "userSig": "生成的UserSig字符串"
+  }
+}
+```
+
+**注意**：此接口需要配置 `TRTC_APP_ID` 和 `TRTC_SECRET_KEY` 环境变量。
 
 ## 数据库设计
 
