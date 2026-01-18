@@ -407,12 +407,20 @@ const statusChange = async (req, res) => {
 
         // 更新会议状态
         const now = new Date();
+        const updateData = {
+            status: status,
+            updatedAt: now
+        };
+
+        // 如果状态变为 Concluded（结束会议），清空所有参会人
+        if (status === 'Concluded') {
+            updateData.innerParticipants = [];
+            updateData.outParticipants = [];
+        }
+
         await MeetRoom.findByIdAndUpdate(
             meeting._id,
-            {
-                status: status,
-                updatedAt: now
-            }
+            updateData
         );
 
         // 如果状态变为 Cancelled 或 Concluded，从调度器中移除
