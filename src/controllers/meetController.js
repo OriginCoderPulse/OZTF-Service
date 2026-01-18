@@ -470,11 +470,11 @@ function generateParticipantId() {
 }
 
 /**
- * 删除外部参会人（根据 participantId）
+ * 删除外部参会人（根据 trtcId）
  */
 const removeOutParticipant = async (req, res) => {
   try {
-    const { meetId, participantId } = req.body;
+    const { meetId, trtcId } = req.body;
 
     // 参数验证
     if (!meetId) {
@@ -486,11 +486,11 @@ const removeOutParticipant = async (req, res) => {
       });
     }
 
-    if (!participantId) {
+    if (!trtcId) {
       return res.status(400).json({
         meta: {
           code: "1024-C01",
-          message: "Invalid request data: Missing participantId",
+          message: "Invalid request data: Missing trtcId",
         },
       });
     }
@@ -506,24 +506,10 @@ const removeOutParticipant = async (req, res) => {
       });
     }
 
-    // 删除该 participantId 对应的参会人
+    // 删除该 trtcId 对应的参会人
     const initialLength = meeting.outParticipants.length;
     meeting.outParticipants = meeting.outParticipants.filter((p) => {
-      // 兼容旧数据格式（字符串）和新格式（对象）
-      if (typeof p === "string") {
-        try {
-          const pData = JSON.parse(p);
-          // 兼容旧格式的 ip 字段
-          return pData.participantId !== participantId && pData.ip !== participantId;
-        } catch {
-          return true; // 解析失败，保留
-        }
-      } else {
-        // 新格式：检查 participantId，兼容旧格式的 ip 字段
-        return (
-          p.participantId && p.participantId !== participantId && (!p.ip || p.ip !== participantId)
-        );
-      }
+      return p.trtcId !== trtcId;
     });
 
     // 如果有删除，更新数据库
@@ -560,7 +546,7 @@ const removeOutParticipant = async (req, res) => {
  */
 const addOutParticipant = async (req, res) => {
   try {
-    const { meetId, participantId, participantInfo } = req.body;
+    const { meetId, trtcId, participantInfo } = req.body;
 
     // 参数验证
     if (!meetId) {
@@ -572,25 +558,11 @@ const addOutParticipant = async (req, res) => {
       });
     }
 
-    if (!participantId) {
+    if (!trtcId) {
       return res.status(400).json({
         meta: {
           code: "1024-C01",
-          message: "Invalid request data: Missing participantId",
-        },
-      });
-    }
-
-    // 验证 participantId 格式（18位字母数字）
-    if (
-      typeof participantId !== "string" ||
-      participantId.length !== 18 ||
-      !/^[a-zA-Z0-9]{18}$/.test(participantId)
-    ) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid participantId: must be 18 characters alphanumeric",
+          message: "Invalid request data: Missing trtcId",
         },
       });
     }
@@ -618,25 +590,14 @@ const addOutParticipant = async (req, res) => {
       });
     }
 
-    // 检查该 participantId 是否已存在
+    // 检查该 trtcId 是否已存在
     const existingParticipant = meeting.outParticipants.find((p) => {
-      if (typeof p === "string") {
-        try {
-          const pData = JSON.parse(p);
-          return pData.participantId === participantId || pData.ip === participantId;
-        } catch {
-          return false;
-        }
-      } else {
-        return (
-          (p.participantId && p.participantId === participantId) || (p.ip && p.ip === participantId)
-        );
-      }
+      return p.trtcId === trtcId;
     });
 
     // 构建参会人信息对象
     const participantObject = {
-      participantId: participantId,
+      trtcId: trtcId,
       name: participantData.name || "匿名用户",
       device: participantData.device || "unknown",
       joinTime: participantData.joinTime ? new Date(participantData.joinTime) : new Date(),
@@ -645,19 +606,7 @@ const addOutParticipant = async (req, res) => {
     if (existingParticipant) {
       // 如果已存在，更新信息
       const index = meeting.outParticipants.findIndex((p) => {
-        if (typeof p === "string") {
-          try {
-            const pData = JSON.parse(p);
-            return pData.participantId === participantId || pData.ip === participantId;
-          } catch {
-            return false;
-          }
-        } else {
-          return (
-            (p.participantId && p.participantId === participantId) ||
-            (p.ip && p.ip === participantId)
-          );
-        }
+        return p.trtcId === trtcId;
       });
       if (index !== -1) {
         meeting.outParticipants[index] = participantObject;
@@ -677,7 +626,7 @@ const addOutParticipant = async (req, res) => {
       },
       data: {
         meetId: meeting.meetId,
-        participantId: participantId,
+        trtcId: trtcId,
         participantCount: meeting.outParticipants.length,
       },
     });
@@ -697,7 +646,7 @@ const addOutParticipant = async (req, res) => {
  */
 const addInnerParticipant = async (req, res) => {
   try {
-    const { meetId, participantId, participantInfo } = req.body;
+    const { meetId, participantId, trtcId, participantInfo } = req.body;
 
     // 参数验证
     if (!meetId || !participantId) {
@@ -705,6 +654,15 @@ const addInnerParticipant = async (req, res) => {
         meta: {
           code: "1024-C01",
           message: "Invalid request data: Missing meetId or participantId",
+        },
+      });
+    }
+
+    if (!trtcId) {
+      return res.status(400).json({
+        meta: {
+          code: "1024-C01",
+          message: "Invalid request data: Missing trtcId",
         },
       });
     }
@@ -756,6 +714,7 @@ const addInnerParticipant = async (req, res) => {
         },
         {
           $set: {
+            "innerParticipants.$.trtcId": trtcId,
             "innerParticipants.$.device":
               participantData.device || existingParticipant.device || "unknown",
             "innerParticipants.$.joinTime": participantData.joinTime
@@ -777,6 +736,7 @@ const addInnerParticipant = async (req, res) => {
           $push: {
             innerParticipants: {
               participantId: new mongoose.Types.ObjectId(participantId),
+              trtcId: trtcId,
               device: participantData.device || "unknown",
               joinTime: participantData.joinTime ? new Date(participantData.joinTime) : new Date(),
             },
@@ -956,6 +916,7 @@ const getRoomProperties = async (req, res) => {
 
       return {
         participantId: participantIdStr,
+        trtcId: p.trtcId || participantIdStr, // 如果没有 trtcId，使用 participantId 作为 fallback
         name: participantName,
         occupation: participantOccupation,
         device: p.device || "unknown",
@@ -969,12 +930,14 @@ const getRoomProperties = async (req, res) => {
 
     // 格式化外部参会人数据
     const outParticipants = meeting.outParticipants.map((p) => ({
-      participantId: p.participantId,
+      trtcId: p.trtcId,
       name: p.name || "匿名用户",
       occupation: "",
       device: p.device || "unknown",
       joinTime:
-        p.joinTime instanceof Date ? p.joinTime.toISOString() : new Date(p.joinTime).toISOString(),
+        p.joinTime instanceof Date
+          ? p.joinTime.toISOString()
+          : new Date(p.joinTime).toISOString(),
       type: "out", // 标记为外部参会人
     }));
 

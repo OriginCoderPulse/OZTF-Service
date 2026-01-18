@@ -49,6 +49,10 @@ const meetRoomSchema = new mongoose.Schema(
             ref: "Staff",
             required: true,
           },
+          trtcId: {
+            type: String,
+            required: true,
+          },
           device: {
             type: String,
             default: "unknown",
@@ -64,7 +68,7 @@ const meetRoomSchema = new mongoose.Schema(
     outParticipants: {
       type: [
         {
-          participantId: {
+          trtcId: {
             type: String,
             required: true,
             unique: false, // 在数组内不唯一，但在整个会议中应该唯一
