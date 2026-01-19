@@ -284,7 +284,7 @@ const buildTabItems = (permissions, userProjects) => {
  */
 const initial = async (req, res) => {
   try {
-    const { uid } = req.body;
+    const { uid, device } = req.body;
 
     // 验证请求参数
     const validation = validateRequest(uid);
@@ -317,14 +317,26 @@ const initial = async (req, res) => {
     // 检查是否是CEO部门（超级管理员）
     const isSuper = departmentName === "CEO";
 
-    // 并行获取权限和项目列表
-    const [permissions, userProjects] = await Promise.all([
-      getStaffPermissions(departmentId),
-      getUserProjects(staff, isSuper),
-    ]);
+    // 判断设备类型：pc 返回完整数据（包含permissions），app 不返回permissions
+    const isPC = device === "pc";
 
-    // 构建TabItem结构
-    const tabItems = buildTabItems(permissions, userProjects);
+    // 构建响应数据
+    const responseData = {
+      department: departmentName,
+    };
+
+    // 只有PC端才返回permissions
+    if (isPC) {
+      // 并行获取权限和项目列表
+      const [permissions, userProjects] = await Promise.all([
+        getStaffPermissions(departmentId),
+        getUserProjects(staff, isSuper),
+      ]);
+
+      // 构建TabItem结构
+      const tabItems = buildTabItems(permissions, userProjects);
+      responseData.permissions = tabItems;
+    }
 
     // 设置响应头，禁用缓存
     res.set({
@@ -339,10 +351,7 @@ const initial = async (req, res) => {
         code: "1024-S200",
         message: "Success",
       },
-      data: {
-        department: departmentName,
-        permissions: tabItems,
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error("[Initial] Error:", error);
