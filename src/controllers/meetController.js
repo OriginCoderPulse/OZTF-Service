@@ -490,19 +490,6 @@ const statusChange = async (req, res) => {
 };
 
 /**
- * 生成18位随机字母数字ID
- * @returns {string} 18位随机ID
- */
-function generateParticipantId() {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (let i = 0; i < 18; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
-
-/**
  * 删除外部参会人（根据 trtcId）
  */
 const removeOutParticipant = async (req, res) => {
@@ -580,7 +567,6 @@ const removeOutParticipant = async (req, res) => {
 
 /**
  * 添加外部参会人
- * 前端生成 18 位唯一 ID，后端直接使用
  */
 const addOutParticipant = async (req, res) => {
   try {
