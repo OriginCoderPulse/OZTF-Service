@@ -136,11 +136,22 @@ const getUtilsByOccupation = (occupation, isSuper, isProjectManager) => {
         "M929.959184 14.098623c-18.798164-18.798164-49.195196-18.798164-67.79338 0L765.975198 110.089249c-4.799531 4.799531-8.59916 10.598965-10.998926 16.99834l-30.796993 81.991993-154.984864 155.184845c-90.191192-58.794258-198.580607-60.394102-261.974417 3.199688-21.997852 21.997852-35.996485 49.195196-42.795821 79.192266-7.399277 33.196758-38.19627 61.394004-72.19295 63.193829-51.195 2.599746-98.590372 21.39791-134.586856 57.194415-89.591251 89.791231-72.792891 251.775413 37.396348 361.964651s272.173421 126.987599 361.764671 37.396348c35.796504-35.796504 54.794649-83.391856 57.194415-134.586856 1.799824-33.99668 29.997071-64.593692 63.193828-72.19295 29.997071-6.799336 57.194415-20.997949 79.192267-42.795821 63.59379-63.59379 61.993946-171.783224 3.199687-261.974416l155.184846-155.184846 81.991993-30.796992c6.399375-2.399766 12.198809-6.199395 16.99834-10.998926l95.990625-95.990626c18.798164-18.798164 18.798164-49.195196 0-67.79338L929.959184 14.098623zM416.009374 512.049995a95.990626 95.990626 0 1 1 0 191.981252 95.990626 95.990626 0 1 1 0-191.981252z",
       ],
     },
+    Intenlligence: {
+      title: "Intenlligence",
+      icon: [
+        "M764.2 687.9H260c-27.9 0-50.6-22.7-50.6-50.6V258.5c0-27.9 22.7-50.6 50.6-50.6h504.2c27.9 0 50.6 22.7 50.6 50.6v378.8c0 27.9-22.7 50.6-50.6 50.6z m-484.8-70h465.4v-340H279.4v340z",
+        "M414.7 427.7m-44.1 0a44.1 44.1 0 1 0 88.2 0 44.1 44.1 0 1 0-88.2 0Z",
+        "M609.5 427.7m-44.1 0a44.1 44.1 0 1 0 88.2 0 44.1 44.1 0 1 0-88.2 0Z",
+        "M579.9 277.9H444.4c-19.3 0-35-15.7-35-35v-90.4c0-27.9 22.7-50.6 50.6-50.6h104.4c27.9 0 50.6 22.7 50.6 50.6l-0.1 90.4c0 19.4-15.7 35-35 35z m-100.5-70h65.5v-36h-65.6l0.1 36zM151.9 499.2c-19.3 0-35-15.7-35-35v-91.1c0-19.3 15.7-35 35-35s35 15.7 35 35v91.1c0 19.3-15.7 35-35 35zM872.1 499.2c-19.3 0-35-15.7-35-35v-91.1c0-19.3 15.7-35 35-35s35 15.7 35 35v91.1c0 19.3-15.7 35-35 35z",
+        "M574.4 798H449.8c-19.3 0-35-15.7-35-35V652.7c0-19.3 15.7-35 35-35h124.6c19.3 0 35 15.7 35 35V763c0 19.3-15.7 35-35 35z m-89.6-70h54.6v-40.3h-54.6V728z",
+        "M764.2 922H260c-27.9 0-50.6-22.7-50.6-50.6v-92.8c0-27.9 22.7-50.6 50.6-50.6h504.2c27.9 0 50.6 22.7 50.6 50.6v92.8c0 27.9-22.7 50.6-50.6 50.6z m-484.8-70h465.4v-54H279.4v54z",
+      ],
+    },
   };
 
   // 超级管理员或项目经理：返回所有
   if (isSuper || isProjectManager) {
-    return [allUtils.Manager, allUtils.Ops, allUtils.UI];
+    return [allUtils.Manager, allUtils.Ops, allUtils.UI, allUtils.Intenlligence];
   }
 
   // 根据职业返回不同的utils
@@ -148,31 +159,31 @@ const getUtilsByOccupation = (occupation, isSuper, isProjectManager) => {
 
   // 开发（FD, BD, FSD）：返回 Manager 和 UI
   if (["FD", "BD", "FSD"].includes(occupationStr)) {
-    return [allUtils.Manager, allUtils.UI];
+    return [allUtils.Manager, allUtils.UI, allUtils.Intenlligence];
   }
 
   // 运维（DevOps）：返回 Manager、UI 和 Ops
   if (occupationStr === "DevOps") {
-    return [allUtils.Manager, allUtils.UI, allUtils.Ops];
+    return [allUtils.Manager, allUtils.UI, allUtils.Ops, allUtils.Intenlligence];
   }
 
   // UI（UI设计师）：只返回 UI
   if (occupationStr === "UI") {
-    return [allUtils.UI];
+    return [allUtils.UI, allUtils.Intenlligence];
   }
 
   // QA（测试）：返回 Manager 和 UI
   if (occupationStr === "QA") {
-    return [allUtils.Manager, allUtils.UI];
+    return [allUtils.Manager, allUtils.UI, allUtils.Intenlligence];
   }
 
   // PM（产品经理）：返回 Manager 和 UI
   if (occupationStr === "PM") {
-    return [allUtils.Manager, allUtils.UI];
+    return [allUtils.Manager, allUtils.UI, allUtils.Intenlligence];
   }
 
   // 默认：返回 Manager 和 UI
-  return [allUtils.Manager, allUtils.UI];
+  return [allUtils.Manager, allUtils.UI, allUtils.Intenlligence];
 };
 
 /**
