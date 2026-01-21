@@ -38,7 +38,22 @@ const generateMeetId = async () => {
 };
 
 /**
- * 创建会议房间
+ * @api {post} /oztf/api/v1/meet/create-room 创建会议房间
+ * @apiName MeetCreateRoom
+ * @apiGroup Meet
+ *
+ * @apiBody {String} topic           会议主题
+ * @apiBody {String} organizerId     组织者用户ID（Mongo ObjectId）
+ * @apiBody {String} startTime       开始时间（ISO 字符串）
+ * @apiBody {Number} duration        持续时间（分钟）
+ * @apiBody {String} [description]   描述
+ * @apiBody {String} [password]      入会密码
+ * @apiBody {String[]} [innerParticipants] 预选内部参会人ID列表
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
  */
 const createRoom = async (req, res) => {
   try {
@@ -129,9 +144,11 @@ const createRoom = async (req, res) => {
       startTime: startTimeDate,
       duration,
       password: password || "",
+      locked: !!(password && String(password).trim()),
       status: initialStatus,
       innerParticipants: participantsArray,
       outParticipants: [],
+      participantsCount: participantsArray.length,
     });
 
     await meetRoom.save();
@@ -181,8 +198,17 @@ const createRoom = async (req, res) => {
 };
 
 /**
- * 获取当前用户能参加的会议或组织的会议
- * CEO可以参加所有会议
+ * @api {post} /oztf/api/v1/meet/get-room 获取当前用户可参加/组织的会议
+ * @apiName MeetGetRoom
+ * @apiGroup Meet
+ *
+ * @apiBody {String} userId 用户ID（Mongo ObjectId）
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {Object[]} data.data_list 会议列表
  */
 const getRoom = async (req, res) => {
   try {
@@ -294,6 +320,11 @@ const getRoom = async (req, res) => {
             : new Date(meeting.startTime).toISOString(),
         duration: meeting.duration,
         status: meeting.status,
+        participantsCount:
+          typeof meeting.participantsCount === "number"
+            ? meeting.participantsCount
+            : (meeting.innerParticipants?.length || 0) + (meeting.outParticipants?.length || 0),
+        locked: !!(meeting.locked || (meeting.password && String(meeting.password).trim())),
       };
     });
 
@@ -423,10 +454,11 @@ const statusChange = async (req, res) => {
       updatedAt: now,
     };
 
-    // 如果状态变为 Concluded（结束会议），清空所有参会人
+    // 如果状态变为 Concluded（结束会议），清空所有参会人，并同步人数
     if (status === "Concluded") {
       updateData.innerParticipants = [];
       updateData.outParticipants = [];
+      updateData.participantsCount = 0;
     }
 
     await MeetRoom.findByIdAndUpdate(meeting._id, updateData);
@@ -513,8 +545,13 @@ const removeOutParticipant = async (req, res) => {
       return p.trtcId !== trtcId;
     });
 
-    // 如果有删除，更新数据库
+    // 如果有删除，更新数据库，并同步总参会人数
     if (meeting.outParticipants.length !== initialLength) {
+      const innerCount = Array.isArray(meeting.innerParticipants)
+        ? meeting.innerParticipants.length
+        : 0;
+      const outCount = meeting.outParticipants.length;
+      meeting.participantsCount = innerCount + outCount;
       meeting.updatedAt = new Date();
       await meeting.save();
     }
@@ -617,6 +654,13 @@ const addOutParticipant = async (req, res) => {
       meeting.outParticipants.push(participantObject);
     }
 
+    const innerCount = Array.isArray(meeting.innerParticipants)
+      ? meeting.innerParticipants.length
+      : 0;
+    const outCount = Array.isArray(meeting.outParticipants)
+      ? meeting.outParticipants.length
+      : 0;
+    meeting.participantsCount = innerCount + outCount;
     meeting.updatedAt = new Date();
     await meeting.save();
 
@@ -753,6 +797,24 @@ const addInnerParticipant = async (req, res) => {
       );
     }
 
+    // 重新计算总参会人数
+    const innerCount = Array.isArray(meeting.innerParticipants)
+      ? meeting.innerParticipants.length
+      : 0;
+    const outCount = Array.isArray(meeting.outParticipants)
+      ? meeting.outParticipants.length
+      : 0;
+    await MeetRoom.findByIdAndUpdate(
+      meeting._id,
+      {
+        $set: {
+          participantsCount: innerCount + outCount,
+          updatedAt: new Date(),
+        },
+      },
+      { new: true }
+    );
+
     res.json({
       meta: {
         code: "1024-S200",
@@ -829,6 +891,24 @@ const removeInnerParticipant = async (req, res) => {
         },
       });
     }
+
+    // 重新计算总参会人数
+    const innerCount = Array.isArray(meeting.innerParticipants)
+      ? meeting.innerParticipants.length
+      : 0;
+    const outCount = Array.isArray(meeting.outParticipants)
+      ? meeting.outParticipants.length
+      : 0;
+    await MeetRoom.findByIdAndUpdate(
+      meeting._id,
+      {
+        $set: {
+          participantsCount: innerCount + outCount,
+          updatedAt: new Date(),
+        },
+      },
+      { new: true }
+    );
 
     res.json({
       meta: {
@@ -961,6 +1041,11 @@ const getRoomProperties = async (req, res) => {
         innerParticipants,
         outParticipants,
         totalCount: innerParticipants.length + outParticipants.length,
+        participantsCount:
+          typeof meeting.participantsCount === "number"
+            ? meeting.participantsCount
+            : innerParticipants.length + outParticipants.length,
+        locked: !!(meeting.locked || (meeting.password && String(meeting.password).trim())),
       },
     });
   } catch (error) {
@@ -1036,6 +1121,11 @@ const getMeetingByMeetId = async (req, res) => {
         topic: meeting.topic,
         description: meeting.description,
         status: meeting.status,
+        participantsCount:
+          typeof meeting.participantsCount === "number"
+            ? meeting.participantsCount
+            : (meeting.innerParticipants?.length || 0) + (meeting.outParticipants?.length || 0),
+        locked: !!(meeting.locked || (meeting.password && String(meeting.password).trim())),
         startTime:
           meeting.startTime instanceof Date
             ? meeting.startTime.toISOString()

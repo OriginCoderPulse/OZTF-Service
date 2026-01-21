@@ -1,7 +1,22 @@
 const Bug = require("../models/Bug");
 const mongoose = require("mongoose");
 
-// 获取Bug列表
+/**
+ * @api {post} /oztf/api/v1/bug/list 获取 Bug 列表
+ * @apiName BugGetList
+ * @apiGroup Bug
+ *
+ * @apiBody {String} project_id 项目ID
+ * @apiBody {String} user_id    用户ID
+ * @apiBody {Number} [page=1]   页码
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {Object[]} data.bugs Bug 列表
+ * @apiSuccess (200) {Number} data.total  总数
+ */
 const getBugList = async (req, res) => {
   try {
     const { project_id, user_id, page = 1 } = req.body;

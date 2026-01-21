@@ -7,7 +7,19 @@ const ExcelJS = require("exceljs");
 const path = require("path");
 const fs = require("fs");
 
-// 获取项目详情
+/**
+ * @api {post} /oztf/api/v1/project/detail 获取项目详情
+ * @apiName ProjectGetDetail
+ * @apiGroup Project
+ *
+ * @apiBody {String} project_id 项目ID
+ * @apiBody {String} user_id    用户ID
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data              项目详情
+ */
 const getProjectDetail = async (req, res) => {
   try {
     const { project_id, user_id } = req.body;
@@ -126,7 +138,25 @@ const getProjectDetail = async (req, res) => {
   }
 };
 
-// 添加项目
+/**
+ * @api {post} /oztf/api/v1/project/add 新增项目
+ * @apiName ProjectAdd
+ * @apiGroup Project
+ *
+ * @apiBody {String} name        项目名称
+ * @apiBody {String} start_date  开始日期
+ * @apiBody {String} end_date    结束日期
+ * @apiBody {String} priority    优先级
+ * @apiBody {String} manager_id  项目负责人ID
+ * @apiBody {Object[]} [members] 项目成员
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {String} data.id   项目ID
+ * @apiSuccess (200) {String} data.name 项目名称
+ */
 const addProject = async (req, res) => {
   try {
     const { name, start_date, end_date, priority, manager_id, members } = req.body;
@@ -224,7 +254,20 @@ const addProject = async (req, res) => {
   }
 };
 
-// 获取项目角色
+/**
+ * @api {post} /oztf/api/v1/project/getRole 获取用户在项目中的角色
+ * @apiName ProjectGetRole
+ * @apiGroup Project
+ *
+ * @apiBody {String} uid        用户ID
+ * @apiBody {String} project_id 项目ID
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {String="M","D"} data.projectRole 角色（M: 管理者，D: 开发者）
+ */
 const getProjectRole = async (req, res) => {
   try {
     const { uid, project_id } = req.body;
@@ -278,7 +321,15 @@ const getProjectRole = async (req, res) => {
   }
 };
 
-// 导出项目功能列表为Excel
+/**
+ * @api {post} /oztf/api/v1/project/feature/export 导出项目功能列表为 Excel
+ * @apiName ProjectExportFeatures
+ * @apiGroup Project
+ *
+ * @apiBody {String} projectId 项目ID
+ *
+ * @apiSuccess (200) {File} Excel 文件流
+ */
 const exportProjectFeatures = async (req, res) => {
   try {
     const { projectId } = req.body;

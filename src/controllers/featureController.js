@@ -1,7 +1,22 @@
 const Feature = require("../models/Feature");
 const mongoose = require("mongoose");
 
-// 获取功能列表
+/**
+ * @api {post} /oztf/api/v1/feature/list 获取功能列表
+ * @apiName FeatureGetList
+ * @apiGroup Feature
+ *
+ * @apiBody {String} project_id 项目ID
+ * @apiBody {String} user_id    用户ID
+ * @apiBody {Number} [page=1]   页码
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {Object[]} data.features 功能列表
+ * @apiSuccess (200) {Number} data.total      总数
+ */
 const getFeatureList = async (req, res) => {
   try {
     const { project_id, user_id, page = 1 } = req.body;

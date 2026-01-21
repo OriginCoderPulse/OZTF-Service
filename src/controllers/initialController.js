@@ -291,7 +291,19 @@ const buildTabItems = (permissions, userProjects) => {
 };
 
 /**
- * Initial接口主函数
+ * @api {post} /oztf/api/v1/initial 初始化用户权限与项目
+ * @apiName Initial
+ * @apiGroup Initial
+ *
+ * @apiBody {String} uid                     用户ID（Mongo ObjectId）
+ * @apiBody {String="pc","app"} device      设备类型
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {String} data.department 部门名称
+ * @apiSuccess (200) {Object[]} [data.permissions] 仅 PC 端返回的权限/菜单
  */
 const initial = async (req, res) => {
   try {

@@ -89,6 +89,18 @@ const meetRoomSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    // 会议总参会人数（内部 + 外部）
+    participantsCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    // 是否加锁（是否设置了密码）
+    locked: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     createdAt: {
       type: Date,
       default: Date.now,

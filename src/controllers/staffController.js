@@ -1,7 +1,23 @@
 const Staff = require("../models/Staff");
 const mongoose = require("mongoose");
 
-// 获取员工信息列表
+/**
+ * @api {post} /oztf/api/v1/staff/info 获取员工信息列表
+ * @apiName StaffGetInfo
+ * @apiGroup Staff
+ *
+ * @apiBody {Number} [current_page=1] 页码
+ * @apiBody {String} [user_id]        当前用户ID
+ * @apiBody {String} [name]           员工姓名（模糊匹配）
+ * @apiBody {String} [department]     部门名称
+ * @apiBody {String} [status]         员工状态
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {Object[]} data.data_list 员工列表
+ */
 const getStaffInfo = async (req, res) => {
   try {
     const {
@@ -125,8 +141,18 @@ const getStaffInfo = async (req, res) => {
   }
 };
 
-// 获取开发人员列表
-// 返回两个列表：1. PM列表 2. 产品部和技术部的人员（不包括PM职位）
+/**
+ * @api {post} /oztf/api/v1/staff/developers 获取开发人员列表
+ * @apiName StaffGetDevelopers
+ * @apiGroup Staff
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {Object[]} data.pmList      PM 列表
+ * @apiSuccess (200) {Object[]} data.developers  开发人员列表
+ */
 const getStaffDevelopers = async (req, res) => {
   try {
     const Department = require("../models/Department");
@@ -192,7 +218,21 @@ const getStaffDevelopers = async (req, res) => {
   }
 };
 
-// 修改员工状态
+/**
+ * @api {post} /oztf/api/v1/staff/change-status 修改员工状态
+ * @apiName StaffChangeStatus
+ * @apiGroup Staff
+ *
+ * @apiBody {String} staffID 员工ID
+ * @apiBody {String="Active","Probation","Inactive"} status 新状态
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {String} data.id     员工ID
+ * @apiSuccess (200) {String} data.status 新状态
+ */
 const changeStaffStatus = async (req, res) => {
   try {
     const { staffID, status } = req.body;
@@ -254,7 +294,19 @@ const changeStaffStatus = async (req, res) => {
   }
 };
 
-// 部门统计
+/**
+ * @api {post} /oztf/api/v1/staff/department-stats 部门统计
+ * @apiName StaffDepartmentStats
+ * @apiGroup Staff
+ *
+ * @apiBody {String} [user_id] 当前用户ID
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {Object[]} data.departments 部门统计列表
+ */
 const getDepartmentStats = async (req, res) => {
   try {
     const { user_id } = req.body;
@@ -308,7 +360,19 @@ const getDepartmentStats = async (req, res) => {
   }
 };
 
-// 薪资水平统计
+/**
+ * @api {post} /oztf/api/v1/staff/salary-level-stats 薪资水平统计
+ * @apiName StaffSalaryLevelStats
+ * @apiGroup Staff
+ *
+ * @apiBody {String} [user_id] 当前用户ID
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {Object[]} data.salary_levels 薪资区间统计
+ */
 const getSalaryLevelStats = async (req, res) => {
   try {
     const { user_id } = req.body;
