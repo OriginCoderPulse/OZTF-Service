@@ -270,6 +270,32 @@ const getUserProjects = async (staff, isSuper) => {
 };
 
 /**
+ * 根据角色获取app端权限列表
+ */
+const getAppPermissionsByRole = async (departmentName) => {
+  // 定义角色对应的权限名称
+  const rolePermissions = {
+    CEO: ["Home", "Finance", "Project"],
+    Finance: ["Home", "Finance"],
+    Technical: ["Home", "Project"],
+    RMD: ["Home"],
+    Product: ["Home", "Project"],
+  };
+
+  // 获取该角色需要的权限名称列表
+  const permissionNames = rolePermissions[departmentName] || ["Home"];
+
+  // 从数据库查询这些权限的详细信息
+  const permissions = await Permission.find({
+    name: { $in: permissionNames },
+  })
+    .sort({ order: 1 })
+    .lean();
+
+  return permissions;
+};
+
+/**
  * 构建TabItem结构
  */
 const buildTabItems = (permissions, userProjects) => {
@@ -340,21 +366,40 @@ const initial = async (req, res) => {
     // 检查是否是CEO部门（超级管理员）
     const isSuper = departmentName === "CEO";
 
-    // 判断设备类型：pc 返回完整数据（包含permissions），app 不返回permissions
+    // 判断设备类型：pc 返回完整数据（包含permissions），app 返回根据角色判断的permissions
     const isPC = device === "pc";
+    const isApp = device === "app";
 
     // 构建响应数据
     const responseData = {
       department: departmentName,
     };
 
-    // 只有PC端才返回permissions
+    // PC端：返回完整的权限列表（从部门权限关联表获取）
     if (isPC) {
       // 并行获取权限和项目列表
       const [permissions, userProjects] = await Promise.all([
         getStaffPermissions(departmentId),
         getUserProjects(staff, isSuper),
       ]);
+
+      // 构建TabItem结构
+      const tabItems = buildTabItems(permissions, userProjects);
+      responseData.permissions = tabItems;
+    }
+
+    // App端：根据角色返回对应的权限列表
+    if (isApp) {
+      // 根据部门名称（角色）获取对应的权限
+      const permissions = await getAppPermissionsByRole(departmentName);
+
+      // 如果是CEO或需要Project权限的角色，获取项目列表
+      const needsProjects = ["CEO", "Technical", "Product"].includes(departmentName);
+      let userProjects = [];
+
+      if (needsProjects) {
+        userProjects = await getUserProjects(staff, isSuper);
+      }
 
       // 构建TabItem结构
       const tabItems = buildTabItems(permissions, userProjects);
