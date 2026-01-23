@@ -16,7 +16,6 @@ const updateMeetingStatus = async (meetingId) => {
   try {
     const meeting = await MeetRoom.findById(meetingId);
     if (!meeting) {
-      console.log(`会议 ${meetingId} 不存在，从待更新列表中移除`);
       pendingMeetings.delete(meetingId.toString());
       return;
     }
@@ -24,7 +23,6 @@ const updateMeetingStatus = async (meetingId) => {
     // 如果会议已取消，从列表中移除
     if (meeting.status === "Cancelled") {
       pendingMeetings.delete(meetingId.toString());
-      console.log(`会议 ${meeting.meetId} 已取消，从待更新列表中移除`);
       return;
     }
 
@@ -49,19 +47,16 @@ const updateMeetingStatus = async (meetingId) => {
         status: newStatus,
         updatedAt: now,
       });
-      console.log(`会议 ${meeting.meetId} 状态已更新: ${meeting.status} -> ${newStatus}`);
 
       // 如果状态变为 'InProgress'，确保会议仍在待更新列表中（继续检测直到结束）
       if (newStatus === "InProgress") {
         pendingMeetings.add(meetingId.toString());
-        console.log(`会议 ${meeting.meetId} 已开始，继续监测直到结束`);
       }
     }
 
     // 如果会议已结束，从待更新列表中移除
     if (newStatus === "Concluded") {
       pendingMeetings.delete(meetingId.toString());
-      console.log(`会议 ${meeting.meetId} 已结束，从待更新列表中移除`);
     }
   } catch (error) {
     console.error(`更新会议 ${meetingId} 状态错误:`, error);
@@ -77,12 +72,9 @@ const runGlobalTimer = async () => {
     if (globalTimer) {
       clearInterval(globalTimer);
       globalTimer = null;
-      console.log("没有待更新的会议，已停止全局定时器");
     }
     return;
   }
-
-  console.log(`开始检查 ${pendingMeetings.size} 个待更新的会议状态...`);
 
   // 并发更新所有会议状态
   const updatePromises = Array.from(pendingMeetings).map((meetingIdStr) => {
@@ -101,7 +93,6 @@ const startGlobalTimer = () => {
     return;
   }
 
-  console.log("启动全局会议状态更新定时器");
   globalTimer = setInterval(() => {
     runGlobalTimer();
   }, CHECK_INTERVAL);
@@ -117,7 +108,6 @@ const stopGlobalTimer = () => {
   if (globalTimer) {
     clearInterval(globalTimer);
     globalTimer = null;
-    console.log("已停止全局定时器");
   }
 };
 
@@ -128,7 +118,6 @@ const stopGlobalTimer = () => {
 const addMeetingToPendingList = (meetingId) => {
   const meetingIdStr = meetingId.toString();
   pendingMeetings.add(meetingIdStr);
-  console.log(`会议 ${meetingIdStr} 已添加到待更新列表，当前列表大小: ${pendingMeetings.size}`);
 
   // 确保全局定时器正在运行
   startGlobalTimer();
@@ -141,7 +130,6 @@ const addMeetingToPendingList = (meetingId) => {
 const removeMeetingFromPendingList = (meetingId) => {
   const meetingIdStr = meetingId.toString();
   pendingMeetings.delete(meetingIdStr);
-  console.log(`会议 ${meetingIdStr} 已从待更新列表中移除，当前列表大小: ${pendingMeetings.size}`);
 
   // 如果列表为空，停止定时器
   if (pendingMeetings.size === 0) {
@@ -160,13 +148,9 @@ const initializeScheduledTasks = async () => {
       status: { $in: ["Pending", "InProgress"] },
     });
 
-    console.log(`发现 ${meetings.length} 个待处理的会议，正在添加到待更新列表...`);
-
     meetings.forEach((meeting) => {
       addMeetingToPendingList(meeting._id);
     });
-
-    console.log(`所有会议已添加到待更新列表，共 ${pendingMeetings.size} 个会议`);
   } catch (error) {
     console.error("初始化会议定时任务错误:", error);
   }

@@ -2,7 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const connectDB = require("./config/database");
+const { connectRedis } = require("./config/redis");
 const { initializeScheduledTasks } = require("./utils/meetStatusScheduler");
+const { initializeCleanupTask } = require("./utils/qrcodeCleanupScheduler");
 require("dotenv").config();
 
 // 验证必要的环境变量
@@ -74,6 +76,16 @@ connectDB().then(() => {
   initializeScheduledTasks();
 });
 
+// 连接Redis（可选，失败不影响应用启动）
+connectRedis()
+  .then(() => {
+    // Redis连接成功后初始化二维码清理任务
+    initializeCleanupTask();
+  })
+  .catch((err) => {
+    console.warn("Redis连接失败，二维码功能可能不可用:", err.message);
+  });
+
 // 路由
 app.use("/oztf/api/v1/initial", require("./routes/initial"));
 app.use("/oztf/api/v1/staff", require("./routes/staff"));
@@ -81,6 +93,7 @@ app.use("/oztf/api/v1/project", require("./routes/project"));
 app.use("/oztf/api/v1/feature", require("./routes/feature"));
 app.use("/oztf/api/v1/bug", require("./routes/bug"));
 app.use("/oztf/api/v1/meet", require("./routes/meet"));
+app.use("/oztf/api/v1/qrcode", require("./routes/qrcode"));
 
 // 健康检查
 app.get("/health", (req, res) => {
