@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const { createServer } = require("http");
+const { createServer } = require("https");
 const { Server } = require("socket.io");
 const connectDB = require("./config/database");
 const { connectRedis } = require("./config/redis");
@@ -11,6 +12,7 @@ const { initializeQrcodeWebSocket } = require("./utils/qrcodeWebSocket");
 const { initializeMeetWebSocket } = require("./utils/meetWebSocket");
 const requestLogger = require("./middleware/requestLogger");
 const responseTemplate = require("./middleware/responseTemplate");
+const fs = require("fs");
 require("dotenv").config();
 
 // 验证必要的环境变量
@@ -54,7 +56,10 @@ function validateEnvironmentVariables() {
 validateEnvironmentVariables();
 
 const app = express();
-const httpServer = createServer(app);
+const httpServer = process.env.ENABLE_HTTPS ? createServer(app) : createHttpServer(app, {
+  key: fs.readFileSync(path.join(__dirname, "../ssl/oztf_site.key")),
+  cert: fs.readFileSync(path.join(__dirname, "../ssl/oztf_site.pem")),
+});
 
 // 初始化 Socket.IO
 const io = new Server(httpServer, {
