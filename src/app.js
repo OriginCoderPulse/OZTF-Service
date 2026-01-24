@@ -61,7 +61,10 @@ const io = new Server(httpServer, {
   cors: {
     origin: "*", // 允许所有来源，生产环境应该限制
     methods: ["GET", "POST"],
+    credentials: true, // 允许携带凭证
   },
+  transports: ["websocket", "polling"], // 支持 websocket 和 polling 两种传输方式
+  allowEIO3: true, // 允许 Engine.IO v3 客户端连接
 });
 
 // 初始化二维码 WebSocket 服务
