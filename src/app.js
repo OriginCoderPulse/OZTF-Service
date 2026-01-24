@@ -57,8 +57,8 @@ validateEnvironmentVariables();
 
 const app = express();
 const httpServer = process.env.ENABLE_HTTPS ? createHttpsServer(app, {
-  key: fs.readFileSync(path.join(__dirname, "../ssl/oztf_site.key")),
-  cert: fs.readFileSync(path.join(__dirname, "../ssl/oztf_site.pem")),
+  key: fs.readFileSync(path.join(__dirname, "./ssl/oztf_site.key")),
+  cert: fs.readFileSync(path.join(__dirname, "./ssl/oztf_site.pem")),
 }) : createHttpServer(app);
 
 // 初始化 Socket.IO
