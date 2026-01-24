@@ -1,8 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const { createServer } = require("http");
-const { createServer } = require("https");
+const { createServer: createHttpServer } = require("http");
+const { createServer: createHttpsServer } = require("https");
 const { Server } = require("socket.io");
 const connectDB = require("./config/database");
 const { connectRedis } = require("./config/redis");
@@ -56,10 +56,10 @@ function validateEnvironmentVariables() {
 validateEnvironmentVariables();
 
 const app = express();
-const httpServer = process.env.ENABLE_HTTPS ? createServer(app) : createHttpServer(app, {
+const httpServer = process.env.ENABLE_HTTPS ? createHttpsServer(app, {
   key: fs.readFileSync(path.join(__dirname, "../ssl/oztf_site.key")),
   cert: fs.readFileSync(path.join(__dirname, "../ssl/oztf_site.pem")),
-});
+}) : createHttpServer(app);
 
 // 初始化 Socket.IO
 const io = new Server(httpServer, {
