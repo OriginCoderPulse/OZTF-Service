@@ -1,8 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const { createServer: createHttpServer } = require("http");
-const { createServer: createHttpsServer } = require("https");
+const { createServer } = require("http");
 const { Server } = require("socket.io");
 const connectDB = require("./config/database");
 const { connectRedis } = require("./config/redis");
@@ -12,7 +11,6 @@ const { initializeQrcodeWebSocket } = require("./utils/qrcodeWebSocket");
 const { initializeMeetWebSocket } = require("./utils/meetWebSocket");
 const requestLogger = require("./middleware/requestLogger");
 const responseTemplate = require("./middleware/responseTemplate");
-const fs = require("fs");
 require("dotenv").config();
 
 // 验证必要的环境变量
@@ -56,20 +54,17 @@ function validateEnvironmentVariables() {
 validateEnvironmentVariables();
 
 const app = express();
-const httpServer = process.env.ENABLE_HTTPS ? createHttpsServer(app, {
-  key: fs.readFileSync(path.join(__dirname, "./ssl/oztf_site.key")),
-  cert: fs.readFileSync(path.join(__dirname, "./ssl/oztf_site.pem")),
-}) : createHttpServer(app);
+const httpServer = createServer(app);
 
 // 初始化 Socket.IO
 const io = new Server(httpServer, {
   cors: {
-    origin: "*", // 允许所有来源，生产环境应该限制
+    origin: "*",
     methods: ["GET", "POST"],
-    credentials: true, // 允许携带凭证
+    credentials: true,
   },
-  transports: ["websocket", "polling"], // 支持 websocket 和 polling 两种传输方式
-  allowEIO3: true, // 允许 Engine.IO v3 客户端连接
+  transports: ["websocket", "polling"],
+  allowEIO3: true,
 });
 
 // 初始化二维码 WebSocket 服务
@@ -79,14 +74,13 @@ initializeQrcodeWebSocket(io);
 initializeMeetWebSocket(io);
 
 // 信任代理（用于正确获取客户端真实 IP）
-// 如果部署在 Nginx 等反向代理后面，需要设置这个
 app.set("trust proxy", true);
 
 // 中间件
-// 1. 请求日志中间件（最早注册，记录所有请求）
+// 1. 请求日志中间件
 app.use(requestLogger);
 
-// 2. 响应模板中间件（在路由之前注册，让所有路由可以使用 res.success() 和 res.error()）
+// 2. 响应模板中间件
 app.use(responseTemplate);
 
 // 3. 其他中间件
