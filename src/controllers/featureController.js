@@ -22,12 +22,7 @@ const getFeatureList = async (req, res) => {
     const { project_id, user_id, page = 1 } = req.body;
 
     if (!project_id || !user_id) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Field validation failed",
-        },
-      });
+      return res.error("Invalid request data: Field validation failed", "1024-C01", 400);
     }
 
     const pageSize = 13;
@@ -62,24 +57,12 @@ const getFeatureList = async (req, res) => {
       completed_date: feature.completedDate,
     }));
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
+    res.success({
         features: featureList,
         total,
-      },
     });
   } catch (error) {
-    console.error("Get feature list error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 

@@ -20,7 +20,6 @@ const connectRedis = async () => {
                 connectTimeout: 5000, // 5秒连接超时
                 reconnectStrategy: (retries) => {
                     if (retries > 3) {
-                        console.warn("Redis重连次数超过3次，停止重连");
                         return false; // 停止重连
                     }
                     return Math.min(retries * 100, 3000); // 最多等待3秒
@@ -31,21 +30,12 @@ const connectRedis = async () => {
         });
 
         redisClient.on("error", (err) => {
-            console.error("Redis Client Error:", err.message);
             isRedisAvailable = false;
         });
 
-        redisClient.on("connect", () => {
-            console.log("Redis 连接中...");
-        });
-
         redisClient.on("ready", () => {
-            console.log("Redis 连接成功");
+            console.log("✅ Redis 连接成功");
             isRedisAvailable = true;
-        });
-
-        redisClient.on("reconnecting", () => {
-            console.log("Redis 重新连接中...");
         });
 
         // 设置连接超时
@@ -58,7 +48,6 @@ const connectRedis = async () => {
         isRedisAvailable = true;
         return Promise.resolve();
     } catch (error) {
-        console.warn("Redis 连接失败，将使用内存存储:", error.message);
         isRedisAvailable = false;
         // Redis连接失败不阻止应用启动，返回成功但标记为不可用
         return Promise.resolve();
@@ -80,7 +69,6 @@ const closeRedis = async () => {
     if (redisClient) {
         await redisClient.quit();
         redisClient = null;
-        console.log("Redis 连接已关闭");
     }
 };
 

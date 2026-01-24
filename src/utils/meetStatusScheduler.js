@@ -1,29 +1,32 @@
 const MeetRoom = require("../models/MeetRoom");
+const schedule = require("node-schedule");
+let broadcastMeetStatusChange = null; // 延迟加载，避免循环依赖
 
 // 存储需要更新状态的会议ID集合
 const pendingMeetings = new Set();
 
-// 全局定时器，只有一个任务在运行
-let globalTimer = null;
+// 全局定时任务
+let globalJob = null;
 
-// 定时器检查间隔（毫秒），默认30秒
-const CHECK_INTERVAL = 30 * 1000;
+// 定时任务执行规则：每秒执行一次
+const JOB_RULE = "* * * * * *"; // 每秒
 
 /**
  * 更新单个会议状态
+ * @returns {Promise<object|null>} 如果有状态变更，返回变更信息；否则返回 null
  */
 const updateMeetingStatus = async (meetingId) => {
   try {
     const meeting = await MeetRoom.findById(meetingId);
     if (!meeting) {
       pendingMeetings.delete(meetingId.toString());
-      return;
+      return null;
     }
 
     // 如果会议已取消，从列表中移除
     if (meeting.status === "Cancelled") {
       pendingMeetings.delete(meetingId.toString());
-      return;
+      return null;
     }
 
     const now = new Date();
@@ -43,6 +46,8 @@ const updateMeetingStatus = async (meetingId) => {
 
     // 只有当状态发生变化时才更新
     if (newStatus !== meeting.status) {
+      const oldStatus = meeting.status;
+
       await MeetRoom.findByIdAndUpdate(meeting._id, {
         status: newStatus,
         updatedAt: now,
@@ -52,14 +57,29 @@ const updateMeetingStatus = async (meetingId) => {
       if (newStatus === "InProgress") {
         pendingMeetings.add(meetingId.toString());
       }
+
+      // 如果会议已结束，从待更新列表中移除
+      if (newStatus === "Concluded") {
+        pendingMeetings.delete(meetingId.toString());
+      }
+
+      // 返回状态变更信息，由 runGlobalTimer 统一批量发送
+      return {
+        meetId: meeting.meetId,
+        status: newStatus,
+        oldStatus: oldStatus,
+      };
     }
 
     // 如果会议已结束，从待更新列表中移除
     if (newStatus === "Concluded") {
       pendingMeetings.delete(meetingId.toString());
     }
+
+    // 没有状态变更，返回 null
+    return null;
   } catch (error) {
-    console.error(`更新会议 ${meetingId} 状态错误:`, error);
+    return null;
   }
 };
 
@@ -68,46 +88,67 @@ const updateMeetingStatus = async (meetingId) => {
  */
 const runGlobalTimer = async () => {
   if (pendingMeetings.size === 0) {
-    // 如果没有待更新的会议，停止定时器
-    if (globalTimer) {
-      clearInterval(globalTimer);
-      globalTimer = null;
-    }
+    // 如果没有待更新的会议，停止定时任务
+    stopGlobalTimer();
     return;
   }
 
-  // 并发更新所有会议状态
-  const updatePromises = Array.from(pendingMeetings).map((meetingIdStr) => {
-    return updateMeetingStatus(meetingIdStr);
+  // 并发更新所有会议状态，收集状态变更信息
+  const updatePromises = Array.from(pendingMeetings).map(async (meetingIdStr) => {
+    const change = await updateMeetingStatus(meetingIdStr);
+    return change; // 返回状态变更信息，如果没有变更则返回 null
   });
 
-  await Promise.all(updatePromises);
+  // 等待所有更新完成，收集所有状态变更
+  const results = await Promise.all(updatePromises);
+  const changes = results.filter(change => change !== null);
+
+  // 如果有状态变更，批量发送 WebSocket 消息
+  if (changes.length > 0) {
+    // 延迟加载，避免循环依赖
+    if (!broadcastMeetStatusChange) {
+      try {
+        const { broadcastMeetStatusChange: broadcastFn } = require("./meetWebSocket");
+        broadcastMeetStatusChange = broadcastFn;
+      } catch (error) {
+      }
+    }
+
+    if (broadcastMeetStatusChange) {
+      // 批量发送所有状态变更
+      broadcastMeetStatusChange({
+        changes: changes, // 发送所有变更的数组
+        count: changes.length,
+      });
+    }
+  }
 };
 
 /**
- * 启动全局定时器（如果还没有启动）
+ * 启动全局定时任务（如果还没有启动）
  */
 const startGlobalTimer = () => {
-  if (globalTimer) {
-    // 定时器已经在运行
+  if (globalJob) {
+    // 定时任务已经在运行
     return;
   }
 
-  globalTimer = setInterval(() => {
+  // 使用 node-schedule 创建定时任务
+  globalJob = schedule.scheduleJob(JOB_RULE, () => {
     runGlobalTimer();
-  }, CHECK_INTERVAL);
+  });
 
   // 立即执行一次
   runGlobalTimer();
 };
 
 /**
- * 停止全局定时器
+ * 停止全局定时任务
  */
 const stopGlobalTimer = () => {
-  if (globalTimer) {
-    clearInterval(globalTimer);
-    globalTimer = null;
+  if (globalJob) {
+    globalJob.cancel();
+    globalJob = null;
   }
 };
 
@@ -152,7 +193,6 @@ const initializeScheduledTasks = async () => {
       addMeetingToPendingList(meeting._id);
     });
   } catch (error) {
-    console.error("初始化会议定时任务错误:", error);
   }
 };
 

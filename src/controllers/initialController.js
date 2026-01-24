@@ -31,7 +31,6 @@ const validateRequest = (uid) => {
 const findAndValidateStaff = async (uid) => {
   // 验证 uid 是否为有效的 ObjectId
   if (!mongoose.Types.ObjectId.isValid(uid)) {
-    console.error(`[Initial] 无效的用户ID格式: ${uid}`);
     return {
       valid: false,
       error: {
@@ -359,7 +358,6 @@ const buildTabItems = (permissions, userProjects) => {
  * @apiSuccess (200) {String} meta.code
  * @apiSuccess (200) {String} meta.message
  * @apiSuccess (200) {Object} data
- * @apiSuccess (200) {String} data.department 部门名称
  * @apiSuccess (200) {Object[]} [data.permissions] 仅 PC 端返回的权限/菜单
  */
 const initial = async (req, res) => {
@@ -369,13 +367,15 @@ const initial = async (req, res) => {
     // 验证请求参数
     const validation = validateRequest(uid);
     if (!validation.valid) {
-      return res.status(validation.error.status).json(validation.error);
+      const error = validation.error;
+      return res.error(error.meta?.message || "Validation failed", error.meta?.code || "1024-C01", error.status || 400);
     }
 
     // 查找并验证员工
     const staffValidation = await findAndValidateStaff(uid);
     if (!staffValidation.valid) {
-      return res.status(staffValidation.error.status).json(staffValidation.error);
+      const error = staffValidation.error;
+      return res.error(error.meta?.message || "Staff validation failed", error.meta?.code || "1024-B01", error.status || 404);
     }
 
     const { staff } = staffValidation;
@@ -383,12 +383,7 @@ const initial = async (req, res) => {
     // 获取部门信息（必须是 ObjectId 引用，已通过 populate 获取）
     const department = staff.departmentInfo || staff.department;
     if (!department || !department._id) {
-      return res.status(401).json({
-        meta: {
-          code: "1024-B01",
-          message: "Authentication failed: Invalid department data",
-        },
-      });
+      return res.error("Authentication failed: Invalid department data", "1024-B01", 401);
     }
 
     const departmentId = department._id;
@@ -401,10 +396,8 @@ const initial = async (req, res) => {
     const isPC = device === "pc";
     const isApp = device === "app";
 
-    // 构建响应数据
-    const responseData = {
-      department: departmentName,
-    };
+    // 构建响应数据（不再返回permission字段，permission已包含在token中）
+    const responseData = {};
 
     // PC端：返回完整的权限列表（从部门权限关联表获取）
     if (isPC) {
@@ -445,21 +438,9 @@ const initial = async (req, res) => {
     });
 
     // 返回响应
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: responseData,
-    });
+    res.success(responseData);
   } catch (error) {
-    console.error("[Initial] Error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 

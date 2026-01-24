@@ -1,10 +1,16 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const { createServer } = require("http");
+const { Server } = require("socket.io");
 const connectDB = require("./config/database");
 const { connectRedis } = require("./config/redis");
 const { initializeScheduledTasks } = require("./utils/meetStatusScheduler");
 const { initializeCleanupTask } = require("./utils/qrcodeCleanupScheduler");
+const { initializeQrcodeWebSocket } = require("./utils/qrcodeWebSocket");
+const { initializeMeetWebSocket } = require("./utils/meetWebSocket");
+const requestLogger = require("./middleware/requestLogger");
+const responseTemplate = require("./middleware/responseTemplate");
 require("dotenv").config();
 
 // 验证必要的环境变量
@@ -34,19 +40,10 @@ function validateEnvironmentVariables() {
   }
 
   if (missingVars.length > 0) {
-    console.error("❌ 缺少必要的环境变量:");
-    missingVars.forEach((varName) => {
-      console.error(`   - ${varName}`);
-    });
-    console.error("\n请检查 .env 文件配置。");
     process.exit(1);
   }
 
   if (invalidVars.length > 0) {
-    console.error("❌ 环境变量格式错误:");
-    invalidVars.forEach((varName) => {
-      console.error(`   - ${varName}`);
-    });
     process.exit(1);
   }
 
@@ -57,12 +54,34 @@ function validateEnvironmentVariables() {
 validateEnvironmentVariables();
 
 const app = express();
+const httpServer = createServer(app);
+
+// 初始化 Socket.IO
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*", // 允许所有来源，生产环境应该限制
+    methods: ["GET", "POST"],
+  },
+});
+
+// 初始化二维码 WebSocket 服务
+initializeQrcodeWebSocket(io);
+
+// 初始化会议 WebSocket 服务
+initializeMeetWebSocket(io);
 
 // 信任代理（用于正确获取客户端真实 IP）
 // 如果部署在 Nginx 等反向代理后面，需要设置这个
 app.set("trust proxy", true);
 
 // 中间件
+// 1. 请求日志中间件（最早注册，记录所有请求）
+app.use(requestLogger);
+
+// 2. 响应模板中间件（在路由之前注册，让所有路由可以使用 res.success() 和 res.error()）
+app.use(responseTemplate);
+
+// 3. 其他中间件
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -83,7 +102,6 @@ connectRedis()
     initializeCleanupTask();
   })
   .catch((err) => {
-    console.warn("Redis连接失败，二维码功能可能不可用:", err.message);
   });
 
 // 路由
@@ -102,19 +120,15 @@ app.get("/health", (req, res) => {
 
 // 错误处理
 app.use((err, req, res, next) => {
-  console.error("Error:", err);
-  res.status(500).json({
-    meta: {
-      code: "1024-E01",
-      message: "Network error: Backend service unavailable",
-    },
-  });
+  // 使用响应模板中间件提供的 res.error() 方法
+  res.error("Network error: Backend service unavailable", "1024-E01", 500);
 });
 
 const PORT = process.env.PORT || 1024;
 
-app.listen(PORT, () => {
-  console.log(`服务器运行在端口 ${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`✅ OZTF-Service 服务已启动`);
+  console.log(`✅ WebSocket 服务已启动`);
 });
 
-module.exports = app;
+module.exports = { app, io };

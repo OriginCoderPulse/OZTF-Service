@@ -118,26 +118,14 @@ const getStaffInfo = async (req, res) => {
       };
     });
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        data_list: dataList,
-        total,
-        active_staff: activeStaff,
-        probation_staff: probationStaff,
-      },
+    res.success({
+      data_list: dataList,
+      total,
+      active_staff: activeStaff,
+      probation_staff: probationStaff,
     });
   } catch (error) {
-    console.error("Get staff info error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -197,24 +185,12 @@ const getStaffDevelopers = async (req, res) => {
       };
     };
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        pmList: pmList.map(formatStaff),
-        developers: developers.map(formatStaff),
-      },
+    res.success({
+      pmList: pmList.map(formatStaff),
+      developers: developers.map(formatStaff),
     });
   } catch (error) {
-    console.error("Get staff developers error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -238,21 +214,11 @@ const changeStaffStatus = async (req, res) => {
     const { staffID, status } = req.body;
 
     if (!staffID || !status) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Field validation failed",
-        },
-      });
+      return res.error("Invalid request data: Field validation failed", "1024-C01", 400);
     }
 
     if (!["Active", "Probation", "Inactive"].includes(status)) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid status value",
-        },
-      });
+      return res.error("Invalid status value", "1024-C01", 400);
     }
 
     const staffId = mongoose.Types.ObjectId.isValid(staffID)
@@ -265,32 +231,15 @@ const changeStaffStatus = async (req, res) => {
     );
 
     if (!staff) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Staff not found",
-        },
-      });
+      return res.error("Staff not found", "1024-C01", 404);
     }
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        id: staff._id.toString(),
-        status: staff.status,
-      },
+    res.success({
+      id: staff._id.toString(),
+      status: staff.status,
     });
   } catch (error) {
-    console.error("Change staff status error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -340,23 +289,11 @@ const getDepartmentStats = async (req, res) => {
       };
     });
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        departments,
-      },
+    res.success({
+      departments,
     });
   } catch (error) {
-    console.error("Get department stats error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -409,23 +346,11 @@ const getSalaryLevelStats = async (req, res) => {
       percentage: total > 0 ? ((item.count / total) * 100).toFixed(2) : 0,
     }));
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        salary_levels: salaryLevels,
-      },
+    res.success({
+      salary_levels: salaryLevels,
     });
   } catch (error) {
-    console.error("Get salary level stats error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 

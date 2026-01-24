@@ -10,6 +10,7 @@ const {
   removeInnerParticipant,
   getRoomProperties,
   getMeetingByMeetId,
+  verifyPassword,
   generateUserSigForMeeting,
 } = require("../controllers/meetController");
 
@@ -22,6 +23,7 @@ router.post("/add-inner-participant", addInnerParticipant);
 router.post("/remove-inner-participant", removeInnerParticipant);
 router.post("/get-room-properties", getRoomProperties);
 router.post("/get-meeting-by-meetid", getMeetingByMeetId);
+router.post("/verify-password", verifyPassword);
 router.post("/generate-usersig", generateUserSigForMeeting);
 
 module.exports = router;

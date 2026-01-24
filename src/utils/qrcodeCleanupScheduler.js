@@ -1,13 +1,14 @@
 const { getRedisClient, checkRedisAvailable } = require("../config/redis");
+const schedule = require("node-schedule");
 
 // Redis key前缀
 const QRCODE_KEY_PREFIX = "qrcode:";
 
-// 清理定时器
-let cleanupTimer = null;
+// 清理定时任务
+let cleanupJob = null;
 
-// 定时器检查间隔（毫秒），默认10分钟
-const CLEANUP_INTERVAL = 10 * 60 * 1000;
+// 定时任务执行规则：每10分钟执行一次
+const CLEANUP_JOB_RULE = "*/10 * * * *"; // 每10分钟
 
 /**
  * 清理Redis中过期的二维码
@@ -80,11 +81,9 @@ const cleanupExpiredQrcodes = async () => {
                     }
                 }
             } catch (error) {
-                console.error(`[QrcodeCleanup] 清理key ${key} 失败:`, error);
             }
         }
     } catch (error) {
-        console.error("[QrcodeCleanup] 清理任务失败:", error);
     }
 };
 
@@ -93,26 +92,26 @@ const cleanupExpiredQrcodes = async () => {
  * 每10分钟清理一次过期的二维码
  */
 const startCleanupTimer = () => {
-    if (cleanupTimer) {
+    if (cleanupJob) {
         return; // 已经启动
     }
 
     // 立即执行一次清理
     cleanupExpiredQrcodes();
 
-    // 每10分钟清理一次
-    cleanupTimer = setInterval(() => {
+    // 使用 node-schedule 创建定时任务，每10分钟执行一次
+    cleanupJob = schedule.scheduleJob(CLEANUP_JOB_RULE, () => {
         cleanupExpiredQrcodes();
-    }, CLEANUP_INTERVAL);
+    });
 };
 
 /**
- * 停止清理定时器
+ * 停止清理定时任务
  */
 const stopCleanupTimer = () => {
-    if (cleanupTimer) {
-        clearInterval(cleanupTimer);
-        cleanupTimer = null;
+    if (cleanupJob) {
+        cleanupJob.cancel();
+        cleanupJob = null;
     }
 };
 
@@ -125,11 +124,8 @@ const initializeCleanupTask = async () => {
         // 等待Redis连接（如果Redis可用，则启动清理任务）
         if (checkRedisAvailable()) {
             startCleanupTimer();
-        } else {
-            console.log("[QrcodeCleanup] Redis未连接，二维码清理任务未启动");
         }
     } catch (error) {
-        console.error("[QrcodeCleanup] 初始化二维码清理任务错误:", error);
     }
 };
 

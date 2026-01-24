@@ -6,6 +6,7 @@ const {
   removeMeetingFromPendingList,
 } = require("../utils/meetStatusScheduler");
 const { generateUserSig } = require("../utils/generateUserSig");
+const { hashPassword, comparePassword } = require("../utils/passwordHash");
 
 /**
  * 生成唯一的会议ID，格式：xxx-xxxx-xxxx
@@ -62,43 +63,23 @@ const createRoom = async (req, res) => {
 
     // 参数验证
     if (!topic || !organizerId || !startTime || !duration) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing required fields",
-        },
-      });
+      return res.error("Invalid request data: Missing required fields", "1024-C01", 400);
     }
 
     // 验证 organizerId 是否为有效的 ObjectId
     if (!mongoose.Types.ObjectId.isValid(organizerId)) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid organizerId format",
-        },
-      });
+      return res.error("Invalid organizerId format", "1024-C01", 400);
     }
 
     // 验证 startTime 是否为有效日期
     const startTimeDate = new Date(startTime);
     if (isNaN(startTimeDate.getTime())) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid startTime format",
-        },
-      });
+      return res.error("Invalid startTime format", "1024-C01", 400);
     }
 
     // 验证 duration 是否为有效数字
     if (typeof duration !== "number" || duration <= 0) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid duration: must be a positive number",
-        },
-      });
+      return res.error("Invalid duration: must be a positive number", "1024-C01", 400);
     }
 
     // 验证 innerParticipants 是否为数组（创建会议时，innerParticipants 仍然是 ObjectId 数组，用于预选参会人）
@@ -106,12 +87,7 @@ const createRoom = async (req, res) => {
     let participantsArray = [];
     if (innerParticipants) {
       if (!Array.isArray(innerParticipants)) {
-        return res.status(400).json({
-          meta: {
-            code: "1024-C01",
-            message: "Invalid innerParticipants: must be an array",
-          },
-        });
+        return res.error("Invalid innerParticipants: must be an array", "1024-C01", 400);
       }
       // 验证数组中的每个元素是否为有效的 ObjectId，并转换为对象格式
       participantsArray = innerParticipants
@@ -135,6 +111,17 @@ const createRoom = async (req, res) => {
       initialStatus = "InProgress";
     }
 
+    // 如果提供了密码，则加密存储
+    let hashedPassword = "";
+    const hasPassword = password && String(password).trim();
+    if (hasPassword) {
+      try {
+        hashedPassword = await hashPassword(String(password).trim());
+      } catch (error) {
+        return res.error("Failed to encrypt password", "1024-E01", 500);
+      }
+    }
+
     // 创建会议房间
     const meetRoom = new MeetRoom({
       meetId,
@@ -143,8 +130,8 @@ const createRoom = async (req, res) => {
       organizerId: new mongoose.Types.ObjectId(organizerId),
       startTime: startTimeDate,
       duration,
-      password: password || "",
-      locked: !!(password && String(password).trim()),
+      password: hashedPassword,
+      locked: !!hasPassword,
       status: initialStatus,
       innerParticipants: participantsArray,
       outParticipants: [],
@@ -156,44 +143,32 @@ const createRoom = async (req, res) => {
     // 将会议添加到待更新列表，启动全局定时任务
     addMeetingToPendingList(meetRoom._id);
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        meetId: meetRoom.meetId,
-        topic: meetRoom.topic,
-        description: meetRoom.description,
-        organizerId: meetRoom.organizerId.toString(),
-        startTime:
-          meetRoom.startTime instanceof Date
-            ? meetRoom.startTime.toISOString()
-            : new Date(meetRoom.startTime).toISOString(),
-        duration: meetRoom.duration,
-        status: meetRoom.status,
-        innerParticipants: meetRoom.innerParticipants.map((p) => ({
-          participantId: p.participantId.toString(),
-          device: p.device,
-          joinTime:
-            p.joinTime instanceof Date
-              ? p.joinTime.toISOString()
-              : new Date(p.joinTime).toISOString(),
-        })),
-        createdAt:
-          meetRoom.createdAt instanceof Date
-            ? meetRoom.createdAt.toISOString()
-            : new Date(meetRoom.createdAt).toISOString(),
-      },
+    res.success({
+      meetId: meetRoom.meetId,
+      topic: meetRoom.topic,
+      description: meetRoom.description,
+      organizerId: meetRoom.organizerId.toString(),
+      startTime:
+        meetRoom.startTime instanceof Date
+          ? meetRoom.startTime.toISOString()
+          : new Date(meetRoom.startTime).toISOString(),
+      duration: meetRoom.duration,
+      status: meetRoom.status,
+      innerParticipants: meetRoom.innerParticipants.map((p) => ({
+        participantId: p.participantId.toString(),
+        device: p.device,
+        joinTime:
+          p.joinTime instanceof Date
+            ? p.joinTime.toISOString()
+            : new Date(p.joinTime).toISOString(),
+      })),
+      createdAt:
+        meetRoom.createdAt instanceof Date
+          ? meetRoom.createdAt.toISOString()
+          : new Date(meetRoom.createdAt).toISOString(),
     });
   } catch (error) {
-    console.error("Create room error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -216,22 +191,12 @@ const getRoom = async (req, res) => {
 
     // 参数验证
     if (!userId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing userId",
-        },
-      });
+      return res.error("Invalid request data: Missing userId", "1024-C01", 400);
     }
 
     // 验证 userId 是否为有效的 ObjectId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid userId format",
-        },
-      });
+      return res.error("Invalid userId format", "1024-C01", 400);
     }
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
@@ -239,12 +204,7 @@ const getRoom = async (req, res) => {
     // 查询用户信息，判断是否是CEO
     const user = await Staff.findById(userObjectId).populate("department");
     if (!user) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "User not found",
-        },
-      });
+      return res.error("User not found", "1024-C01", 404);
     }
 
     // 判断是否是CEO（occupation为CEO且部门为CEO）
@@ -328,24 +288,12 @@ const getRoom = async (req, res) => {
       };
     });
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        data_list: dataList,
-        total: dataList.length,
-      },
+    res.success({
+      data_list: dataList,
+      total: dataList.length,
     });
   } catch (error) {
-    console.error("Get room error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -358,33 +306,18 @@ const statusChange = async (req, res) => {
 
     // 参数验证
     if (!meetId || !status || !userId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing required fields",
-        },
-      });
+      return res.error("Invalid request data: Missing required fields", "1024-C01", 400);
     }
 
     // 验证 status 是否为有效值
     const validStatuses = ["Cancelled", "Concluded"];
     if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid status: must be Cancelled or Concluded",
-        },
-      });
+      return res.error("Invalid status: must be Cancelled or Concluded", "1024-C01", 400);
     }
 
     // 验证 userId 是否为有效的 ObjectId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid userId format",
-        },
-      });
+      return res.error("Invalid userId format", "1024-C01", 400);
     }
 
     const userObjectId = new mongoose.Types.ObjectId(userId);
@@ -392,23 +325,13 @@ const statusChange = async (req, res) => {
     // 查询会议信息
     const meeting = await MeetRoom.findOne({ meetId }).populate("organizerId");
     if (!meeting) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Meeting not found",
-        },
-      });
+      return res.error("Meeting not found", "1024-C01", 404);
     }
 
     // 查询用户信息，判断是否是CEO
     const user = await Staff.findById(userObjectId);
     if (!user) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "User not found",
-        },
-      });
+      return res.error("User not found", "1024-C01", 404);
     }
 
     // 权限验证：只有CEO或会议组织者可以修改状态
@@ -416,34 +339,19 @@ const statusChange = async (req, res) => {
     const isOrganizer = meeting.organizerId._id.toString() === userId;
 
     if (!isCEO && !isOrganizer) {
-      return res.status(403).json({
-        meta: {
-          code: "1024-C01",
-          message: "Permission denied: Only CEO or meeting organizer can change status",
-        },
-      });
+      return res.error("Permission denied: Only CEO or meeting organizer can change status", "1024-C01", 403);
     }
 
     // 状态验证
     if (status === "Cancelled") {
       // 只能取消 Pending 或 InProgress 状态的会议
       if (meeting.status !== "Pending" && meeting.status !== "InProgress") {
-        return res.status(400).json({
-          meta: {
-            code: "1024-C01",
-            message: "Cannot cancel meeting: Meeting is not in Pending or InProgress status",
-          },
-        });
+        return res.error("Cannot cancel meeting: Meeting is not in Pending or InProgress status", "1024-C01", 400);
       }
     } else if (status === "Concluded") {
       // 只能结束 InProgress 状态的会议
       if (meeting.status !== "InProgress") {
-        return res.status(400).json({
-          meta: {
-            code: "1024-C01",
-            message: "Cannot conclude meeting: Meeting is not in InProgress status",
-          },
-        });
+        return res.error("Cannot conclude meeting: Meeting is not in InProgress status", "1024-C01", 400);
       }
     }
 
@@ -468,24 +376,12 @@ const statusChange = async (req, res) => {
       removeMeetingFromPendingList(meeting._id);
     }
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        meetId: meeting.meetId,
-        status: status,
-      },
+    res.success({
+      meetId: meeting.meetId,
+      status: status,
     });
   } catch (error) {
-    console.error("Status change error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -498,32 +394,17 @@ const removeOutParticipant = async (req, res) => {
 
     // 参数验证
     if (!meetId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing meetId",
-        },
-      });
+      return res.error("Invalid request data: Missing meetId", "1024-C01", 400);
     }
 
     if (!trtcId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing trtcId",
-        },
-      });
+      return res.error("Invalid request data: Missing trtcId", "1024-C01", 400);
     }
 
     // 查找会议
     const meeting = await MeetRoom.findOne({ meetId });
     if (!meeting) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Meeting not found",
-        },
-      });
+      return res.error("Meeting not found", "1024-C01", 404);
     }
 
     // 删除该 trtcId 对应的参会人
@@ -543,25 +424,13 @@ const removeOutParticipant = async (req, res) => {
       await meeting.save();
     }
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        meetId: meeting.meetId,
-        participantCount: meeting.outParticipants.length,
-        removed: initialLength - meeting.outParticipants.length > 0,
-      },
+    res.success({
+      meetId: meeting.meetId,
+      participantCount: meeting.outParticipants.length,
+      removed: initialLength - meeting.outParticipants.length > 0,
     });
   } catch (error) {
-    console.error("Remove out participant error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -574,21 +443,11 @@ const addOutParticipant = async (req, res) => {
 
     // 参数验证
     if (!meetId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing meetId",
-        },
-      });
+      return res.error("Invalid request data: Missing meetId", "1024-C01", 400);
     }
 
     if (!trtcId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing trtcId",
-        },
-      });
+      return res.error("Invalid request data: Missing trtcId", "1024-C01", 400);
     }
 
     // 解析参会人信息（可能是 JSON 字符串）
@@ -599,19 +458,13 @@ const addOutParticipant = async (req, res) => {
           typeof participantInfo === "string" ? JSON.parse(participantInfo) : participantInfo;
       } catch (parseError) {
         // 如果解析失败，使用默认值
-        console.warn("解析参会人信息失败，使用默认值:", parseError);
       }
     }
 
     // 查找会议
     const meeting = await MeetRoom.findOne({ meetId });
     if (!meeting) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Meeting not found",
-        },
-      });
+      return res.error("Meeting not found", "1024-C01", 404);
     }
 
     // 检查该 trtcId 是否已存在
@@ -650,25 +503,13 @@ const addOutParticipant = async (req, res) => {
     meeting.updatedAt = new Date();
     await meeting.save();
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        meetId: meeting.meetId,
-        trtcId: trtcId,
-        participantCount: meeting.outParticipants.length,
-      },
+    res.success({
+      meetId: meeting.meetId,
+      trtcId: trtcId,
+      participantCount: meeting.outParticipants.length,
     });
   } catch (error) {
-    console.error("Add out participant error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -681,31 +522,16 @@ const addInnerParticipant = async (req, res) => {
 
     // 参数验证
     if (!meetId || !participantId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing meetId or participantId",
-        },
-      });
+      return res.error("Invalid request data: Missing meetId or participantId", "1024-C01", 400);
     }
 
     if (!trtcId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing trtcId",
-        },
-      });
+      return res.error("Invalid request data: Missing trtcId", "1024-C01", 400);
     }
 
     // 验证 participantId 是否为有效的 ObjectId
     if (!mongoose.Types.ObjectId.isValid(participantId)) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid participantId format",
-        },
-      });
+      return res.error("Invalid participantId format", "1024-C01", 400);
     }
 
     // 解析参会人信息（可能是 JSON 字符串）
@@ -715,19 +541,13 @@ const addInnerParticipant = async (req, res) => {
         participantData =
           typeof participantInfo === "string" ? JSON.parse(participantInfo) : participantInfo;
       } catch (parseError) {
-        console.warn("解析参会人信息失败，使用默认值:", parseError);
       }
     }
 
     // 先检查会议是否存在
     const existingMeeting = await MeetRoom.findOne({ meetId });
     if (!existingMeeting) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Meeting not found",
-        },
-      });
+      return res.error("Meeting not found", "1024-C01", 404);
     }
 
     // 检查该参会人是否已经存在
@@ -801,25 +621,13 @@ const addInnerParticipant = async (req, res) => {
       { new: true }
     );
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        meetId: meeting.meetId,
-        participantId: participantId,
-        participantCount: meeting.innerParticipants.length,
-      },
+    res.success({
+      meetId: meeting.meetId,
+      participantId: participantId,
+      participantCount: meeting.innerParticipants.length,
     });
   } catch (error) {
-    console.error("Add inner participant error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -832,22 +640,12 @@ const removeInnerParticipant = async (req, res) => {
 
     // 参数验证
     if (!meetId || !participantId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing meetId or participantId",
-        },
-      });
+      return res.error("Invalid request data: Missing meetId or participantId", "1024-C01", 400);
     }
 
     // 验证 participantId 是否为有效的 ObjectId
     if (!mongoose.Types.ObjectId.isValid(participantId)) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid participantId format",
-        },
-      });
+      return res.error("Invalid participantId format", "1024-C01", 400);
     }
 
     // 使用 findOneAndUpdate 原子性地删除参会人，避免版本冲突
@@ -870,12 +668,7 @@ const removeInnerParticipant = async (req, res) => {
     );
 
     if (!meeting) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Meeting not found",
-        },
-      });
+      return res.error("Meeting not found", "1024-C01", 404);
     }
 
     // 重新计算总参会人数
@@ -896,25 +689,13 @@ const removeInnerParticipant = async (req, res) => {
       { new: true }
     );
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        meetId: meeting.meetId,
-        participantId: participantId,
-        participantCount: meeting.innerParticipants.length,
-      },
+    res.success({
+      meetId: meeting.meetId,
+      participantId: participantId,
+      participantCount: meeting.innerParticipants.length,
     });
   } catch (error) {
-    console.error("Remove inner participant error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -926,24 +707,14 @@ const getRoomProperties = async (req, res) => {
     let { meetId } = req.body;
 
     if (!meetId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing meetId",
-        },
-      });
+      return res.error("Invalid request data: Missing meetId", "1024-C01", 400);
     }
 
     // 去除前后空格并验证格式
     meetId = typeof meetId === "string" ? meetId.trim() : String(meetId).trim();
 
     if (!meetId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: meetId cannot be empty",
-        },
-      });
+      return res.error("Invalid request data: meetId cannot be empty", "1024-C01", 400);
     }
 
     // 查找会议并填充内部参会人的用户信息
@@ -952,12 +723,7 @@ const getRoomProperties = async (req, res) => {
       .lean();
 
     if (!meeting) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Meeting not found",
-        },
-      });
+      return res.error("Meeting not found", "1024-C01", 404);
     }
 
     // 格式化内部参会人数据
@@ -1008,40 +774,28 @@ const getRoomProperties = async (req, res) => {
       type: "out", // 标记为外部参会人
     }));
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        meetId: meeting.meetId,
-        topic: meeting.topic || "",
-        duration: meeting.duration || 0,
-        startTime:
-          meeting.startTime instanceof Date
-            ? meeting.startTime.toISOString()
-            : meeting.startTime
-              ? new Date(meeting.startTime).toISOString()
-              : "",
-        organizerId: meeting.organizerId ? meeting.organizerId.toString() : null,
-        innerParticipants,
-        outParticipants,
-        totalCount: innerParticipants.length + outParticipants.length,
-        participantsCount:
-          typeof meeting.participantsCount === "number"
-            ? meeting.participantsCount
-            : innerParticipants.length + outParticipants.length,
-        locked: !!(meeting.locked || (meeting.password && String(meeting.password).trim())),
-      },
+    res.success({
+      meetId: meeting.meetId,
+      topic: meeting.topic || "",
+      duration: meeting.duration || 0,
+      startTime:
+        meeting.startTime instanceof Date
+          ? meeting.startTime.toISOString()
+          : meeting.startTime
+            ? new Date(meeting.startTime).toISOString()
+            : "",
+      organizerId: meeting.organizerId ? meeting.organizerId.toString() : null,
+      innerParticipants,
+      outParticipants,
+      totalCount: innerParticipants.length + outParticipants.length,
+      participantsCount:
+        typeof meeting.participantsCount === "number"
+          ? meeting.participantsCount
+          : innerParticipants.length + outParticipants.length,
+      locked: !!(meeting.locked || (meeting.password && String(meeting.password).trim())),
     });
   } catch (error) {
-    console.error("Get room properties error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -1053,80 +807,103 @@ const getMeetingByMeetId = async (req, res) => {
     let { meetId } = req.body;
 
     if (!meetId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Missing meetId",
-        },
-      });
+      return res.error("Invalid request data: Missing meetId", "1024-C01", 400);
     }
 
     // 去除前后空格并验证格式
     meetId = typeof meetId === "string" ? meetId.trim() : String(meetId).trim();
 
     if (!meetId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: meetId cannot be empty",
-        },
-      });
+      return res.error("Invalid request data: meetId cannot be empty", "1024-C01", 400);
     }
-
-    // 添加调试日志
-    console.log("查询会议，meetId:", meetId);
 
     const meeting = await MeetRoom.findOne({ meetId })
       .populate("organizerId", "name occupation")
       .lean();
 
     if (!meeting) {
-      console.log("会议未找到，meetId:", meetId);
-      // 尝试查找所有会议，用于调试
-      const allMeetings = await MeetRoom.find({}).select("meetId").lean();
-      console.log(
-        "数据库中所有会议的meetId:",
-        allMeetings.map((m) => m.meetId)
-      );
-
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Meeting not found",
-        },
-      });
+      return res.error("Meeting not found", "1024-C01", 404);
     }
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        meetId: meeting.meetId,
-        topic: meeting.topic,
-        description: meeting.description,
-        status: meeting.status,
-        participantsCount:
-          typeof meeting.participantsCount === "number"
-            ? meeting.participantsCount
-            : (meeting.innerParticipants?.length || 0) + (meeting.outParticipants?.length || 0),
-        locked: !!(meeting.locked || (meeting.password && String(meeting.password).trim())),
-        startTime:
-          meeting.startTime instanceof Date
-            ? meeting.startTime.toISOString()
-            : new Date(meeting.startTime).toISOString(),
-        duration: meeting.duration,
-      },
+    res.success({
+      meetId: meeting.meetId,
+      topic: meeting.topic,
+      description: meeting.description,
+      status: meeting.status,
+      participantsCount:
+        typeof meeting.participantsCount === "number"
+          ? meeting.participantsCount
+          : (meeting.innerParticipants?.length || 0) + (meeting.outParticipants?.length || 0),
+      locked: !!(meeting.locked || (meeting.password && String(meeting.password).trim())),
+      startTime:
+        meeting.startTime instanceof Date
+          ? meeting.startTime.toISOString()
+          : new Date(meeting.startTime).toISOString(),
+      duration: meeting.duration,
     });
   } catch (error) {
-    console.error("Get meeting by meetId error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
+  }
+};
+
+/**
+ * 验证会议密码
+ * @api {post} /oztf/api/v1/meet/verify-password 验证会议密码
+ * @apiName VerifyMeetingPassword
+ * @apiGroup Meet
+ *
+ * @apiBody {String} meetId 会议ID
+ * @apiBody {String} password 会议密码
+ *
+ * @apiSuccess (200) {Object} meta
+ * @apiSuccess (200) {String} meta.code
+ * @apiSuccess (200) {String} meta.message
+ * @apiSuccess (200) {Object} data
+ * @apiSuccess (200) {Boolean} data.valid 密码是否正确
+ */
+const verifyPassword = async (req, res) => {
+  try {
+    let { meetId, password } = req.body;
+
+    if (!meetId) {
+      return res.error("Invalid request data: Missing meetId", "1024-C01", 400);
+    }
+
+    if (!password) {
+      return res.error("Invalid request data: Missing password", "1024-C01", 400);
+    }
+
+    // 去除前后空格并验证格式
+    meetId = typeof meetId === "string" ? meetId.trim() : String(meetId).trim();
+    password = typeof password === "string" ? password.trim() : String(password).trim();
+
+    if (!meetId) {
+      return res.error("Invalid request data: meetId cannot be empty", "1024-C01", 400);
+    }
+
+    if (!password) {
+      return res.error("Invalid request data: password cannot be empty", "1024-C01", 400);
+    }
+
+    // 查询会议
+    const meeting = await MeetRoom.findOne({ meetId }).lean();
+
+    if (!meeting) {
+      return res.error("Meeting not found", "1024-C01", 404);
+    }
+
+    // 检查会议是否设置了密码
+    if (!meeting.locked && (!meeting.password || !String(meeting.password).trim())) {
+      // 会议没有设置密码，返回密码正确（允许进入）
+      return res.success({ valid: true });
+    }
+
+    // 验证密码（使用加密比较）
+    const isValid = await comparePassword(password, String(meeting.password));
+
+    res.success({ valid: isValid });
+  } catch (error) {
+    res.error();
   }
 };
 
@@ -1139,12 +916,7 @@ const generateUserSigForMeeting = async (req, res) => {
 
     // 参数验证
     if (!userId || typeof userId !== "string") {
-      return res.status(400).json({
-        meta: {
-          code: "1024-E02",
-          message: "Invalid parameter: userId is required",
-        },
-      });
+      return res.error("Invalid parameter: userId is required", "1024-E02", 400);
     }
 
     // 从环境变量获取 TRTC 配置
@@ -1153,75 +925,34 @@ const generateUserSigForMeeting = async (req, res) => {
 
     // 详细的配置检查
     if (!process.env.TRTC_APP_ID) {
-      console.error("[GenerateUserSig] TRTC_APP_ID is not configured in environment variables");
-      return res.status(500).json({
-        meta: {
-          code: "1024-E01",
-          message: "TRTC configuration is missing: TRTC_APP_ID is not set. Please configure it in .env file.",
-        },
-      });
+      return res.error("TRTC configuration is missing: TRTC_APP_ID is not set. Please configure it in .env file.", "1024-E01", 500);
     }
 
     if (!process.env.TRTC_SECRET_KEY) {
-      console.error("[GenerateUserSig] TRTC_SECRET_KEY is not configured in environment variables");
-      return res.status(500).json({
-        meta: {
-          code: "1024-E01",
-          message: "TRTC configuration is missing: TRTC_SECRET_KEY is not set. Please configure it in .env file.",
-        },
-      });
+      return res.error("TRTC configuration is missing: TRTC_SECRET_KEY is not set. Please configure it in .env file.", "1024-E01", 500);
     }
 
     if (!sdkAppId || isNaN(sdkAppId)) {
-      console.error("[GenerateUserSig] TRTC_APP_ID is invalid:", process.env.TRTC_APP_ID);
-      return res.status(500).json({
-        meta: {
-          code: "1024-E01",
-          message: "TRTC configuration is invalid: TRTC_APP_ID must be a valid number.",
-        },
-      });
+      return res.error("TRTC configuration is invalid: TRTC_APP_ID must be a valid number.", "1024-E01", 500);
     }
 
     if (!secretKey || typeof secretKey !== "string" || secretKey.trim() === "") {
-      console.error("[GenerateUserSig] TRTC_SECRET_KEY is invalid");
-      return res.status(500).json({
-        meta: {
-          code: "1024-E01",
-          message: "TRTC configuration is invalid: TRTC_SECRET_KEY must be a non-empty string.",
-        },
-      });
+      return res.error("TRTC configuration is invalid: TRTC_SECRET_KEY must be a non-empty string.", "1024-E01", 500);
     }
 
     // 生成 UserSig
     const result = generateUserSig(sdkAppId, userId, secretKey);
 
     if (!result.userSig) {
-      return res.status(500).json({
-        meta: {
-          code: "1024-E01",
-          message: "Failed to generate UserSig",
-        },
-      });
+      return res.error("Failed to generate UserSig", "1024-E01", 500);
     }
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
-        sdkAppId: result.sdkAppId,
-        userSig: result.userSig,
-      },
+    res.success({
+      sdkAppId: result.sdkAppId,
+      userSig: result.userSig,
     });
   } catch (error) {
-    console.error("[GenerateUserSig] Error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -1235,5 +966,6 @@ module.exports = {
   removeInnerParticipant,
   getRoomProperties,
   getMeetingByMeetId,
+  verifyPassword,
   generateUserSigForMeeting,
 };

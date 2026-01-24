@@ -1,6 +1,8 @@
 const QRCode = require("qrcode");
 const crypto = require("crypto");
+const schedule = require("node-schedule");
 const { getRedisClient, checkRedisAvailable } = require("../config/redis");
+const { broadcastQrcodeStatus } = require("../utils/qrcodeWebSocket");
 
 // Redis key前缀
 const QRCODE_KEY_PREFIX = "qrcode:";
@@ -61,22 +63,12 @@ const generateQrcode = async (req, res) => {
         const { content, size = 200 } = req.body;
 
         if (!content) {
-            return res.status(400).json({
-                meta: {
-                    code: "1024-C01",
-                    message: "Invalid request data: content is required",
-                },
-            });
+            return res.error("Invalid request data: content is required", "1024-C01", 400);
         }
 
         // 检查Redis是否可用
         if (!checkRedisAvailable()) {
-            return res.status(503).json({
-                meta: {
-                    code: "1024-E01",
-                    message: "Redis未连接，服务不可用",
-                },
-            });
+            return res.error("Redis未连接，服务不可用", "1024-E01", 503);
         }
 
         // 生成二维码ID
@@ -112,7 +104,9 @@ const generateQrcode = async (req, res) => {
         await redis.setEx(key, 600, JSON.stringify(qrcodeStatus)); // 10分钟TTL
 
         // 设置过期后的处理：3分钟后标记为expired
-        setTimeout(async () => {
+        // 使用 node-schedule 在3分钟后执行
+        const expireTime = new Date(Date.now() + 3 * 60 * 1000); // 3分钟后
+        schedule.scheduleJob(expireTime, async () => {
             try {
                 if (checkRedisAvailable()) {
                     const redis = getRedisClient();
@@ -128,134 +122,28 @@ const generateQrcode = async (req, res) => {
                             // 使用PERSIST移除TTL，然后重新设置较长的TTL，确保不会自动删除
                             await redis.persist(key);
                             await redis.setEx(key, 600, JSON.stringify(status)); // 再设置10分钟，由清理任务删除
+
+                            // 通过 WebSocket 推送过期状态
+                            broadcastQrcodeStatus(qrcodeId, {
+                                status: status.status,
+                                statusText: status.statusText,
+                                authorization: null,
+                            });
                         }
                     }
                 }
             } catch (error) {
-                console.error("[QrcodeExpire] 处理过期二维码失败:", error);
             }
-        }, 3 * 60 * 1000);
+        });
 
-        res.json({
-            meta: {
-                code: "1024-S200",
-                message: "Success",
-            },
-            data: {
-                qrcodeId,
-                imageBase64: `data:image/png;base64,${imageBase64}`,
-                status: "pending",
-                statusText: "请使用壹零贰肆App扫描二维码登录",
-            },
+        res.success({
+            qrcodeId,
+            imageBase64: `data:image/png;base64,${imageBase64}`,
+            status: "pending",
+            statusText: "请使用壹零贰肆App扫描二维码登录",
         });
     } catch (error) {
-        console.error("[GenerateQrcode] Error:", error);
-        res.status(500).json({
-            meta: {
-                code: "1024-E01",
-                message: error.message || "Network error: Backend service unavailable",
-            },
-        });
-    }
-};
-
-/**
- * 检查二维码状态
- * 
- * @api {post} /oztf/api/v1/qrcode/status 检查二维码状态
- * @apiName CheckQrcodeStatus
- * @apiGroup Qrcode
- * 
- * @apiBody {String} qrcodeId 二维码ID
- * 
- * @apiSuccess (200) {Object} meta
- * @apiSuccess (200) {String} meta.code
- * @apiSuccess (200) {String} meta.message
- * @apiSuccess (200) {Object} data
- * @apiSuccess (200) {String} data.status 二维码状态（pending/scanned/authorized/expired）
- * @apiSuccess (200) {String} [data.authorization] 如果已认证，返回授权token
- */
-const checkQrcodeStatus = async (req, res) => {
-    try {
-        const { qrcodeId } = req.body;
-
-        if (!qrcodeId) {
-            return res.status(400).json({
-                meta: {
-                    code: "1024-C01",
-                    message: "Invalid request data: qrcodeId is required",
-                },
-            });
-        }
-
-        // 检查Redis是否可用
-        if (!checkRedisAvailable()) {
-            return res.status(503).json({
-                meta: {
-                    code: "1024-E01",
-                    message: "Redis未连接，服务不可用",
-                },
-            });
-        }
-
-        const redis = getRedis();
-        const key = getQrcodeKey(qrcodeId);
-        const statusStr = await redis.get(key);
-
-        if (!statusStr) {
-            return res.status(404).json({
-                meta: {
-                    code: "1024-B01",
-                    message: "Qrcode not found",
-                },
-            });
-        }
-
-        const qrcodeStatus = JSON.parse(statusStr);
-        const now = Date.now();
-        const expiredThreshold = 3 * 60 * 1000; // 3分钟过期时间
-
-        // 检查是否过期（pending或scanned状态都可能过期）
-        if ((qrcodeStatus.status === "pending" || qrcodeStatus.status === "scanned") &&
-            qrcodeStatus.createdAt && (now - qrcodeStatus.createdAt > expiredThreshold)) {
-            // 更新为过期状态
-            qrcodeStatus.status = "expired";
-            qrcodeStatus.statusText = "二维码已过期，请刷新";
-            qrcodeStatus.expiredAt = Date.now();
-            await redis.persist(key);
-            await redis.setEx(key, 600, JSON.stringify(qrcodeStatus));
-        }
-
-        // 根据状态返回对应的状态文本
-        let statusText = qrcodeStatus.statusText || "请使用壹零贰肆App扫描二维码登录";
-        if (qrcodeStatus.status === "scanned") {
-            statusText = "已扫描，等待确认...";
-        } else if (qrcodeStatus.status === "authorized") {
-            statusText = "已认证，正在登录...";
-        } else if (qrcodeStatus.status === "expired") {
-            statusText = "二维码已过期，请刷新";
-        }
-
-        // 只在authorized状态返回authorization
-        res.json({
-            meta: {
-                code: "1024-S200",
-                message: "Success",
-            },
-            data: {
-                status: qrcodeStatus.status,
-                statusText: statusText,
-                authorization: qrcodeStatus.status === "authorized" ? (qrcodeStatus.authorization || null) : null,
-            },
-        });
-    } catch (error) {
-        console.error("[CheckQrcodeStatus] Error:", error);
-        res.status(500).json({
-            meta: {
-                code: "1024-E01",
-                message: error.message || "Network error: Backend service unavailable",
-            },
-        });
+        res.error(error.message || "Network error: Backend service unavailable");
     }
 };
 
@@ -277,22 +165,12 @@ const scanQrcode = async (req, res) => {
         const { qrcodeId } = req.body;
 
         if (!qrcodeId) {
-            return res.status(400).json({
-                meta: {
-                    code: "1024-C01",
-                    message: "Invalid request data: qrcodeId is required",
-                },
-            });
+            return res.error("Invalid request data: qrcodeId is required", "1024-C01", 400);
         }
 
         // 检查Redis是否可用
         if (!checkRedisAvailable()) {
-            return res.status(503).json({
-                meta: {
-                    code: "1024-E01",
-                    message: "Redis未连接，服务不可用",
-                },
-            });
+            return res.error("Redis未连接，服务不可用", "1024-E01", 503);
         }
 
         const redis = getRedis();
@@ -300,12 +178,7 @@ const scanQrcode = async (req, res) => {
         const statusStr = await redis.get(key);
 
         if (!statusStr) {
-            return res.status(404).json({
-                meta: {
-                    code: "1024-B01",
-                    message: "Qrcode not found",
-                },
-            });
+            return res.error("Qrcode not found", "1024-B01", 404);
         }
 
         const qrcodeStatus = JSON.parse(statusStr);
@@ -314,21 +187,11 @@ const scanQrcode = async (req, res) => {
 
         // 检查是否过期
         if (qrcodeStatus.createdAt && (now - qrcodeStatus.createdAt > expiredThreshold)) {
-            return res.status(400).json({
-                meta: {
-                    code: "1024-C03",
-                    message: "Qrcode expired",
-                },
-            });
+            return res.error("Qrcode expired", "1024-C03", 400);
         }
 
         if (qrcodeStatus.status !== "pending") {
-            return res.status(400).json({
-                meta: {
-                    code: "1024-C02",
-                    message: "Qrcode already processed",
-                },
-            });
+            return res.error("Qrcode already processed", "1024-C02", 400);
         }
 
         // 更新状态为已扫描（不传authorization和userId）
@@ -339,20 +202,16 @@ const scanQrcode = async (req, res) => {
         // 更新到Redis，保留1小时（3600秒）用于日志和调试
         await redis.setEx(key, 3600, JSON.stringify(qrcodeStatus));
 
-        res.json({
-            meta: {
-                code: "1024-S200",
-                message: "Success",
-            },
+        // 通过 WebSocket 推送状态变更
+        broadcastQrcodeStatus(qrcodeId, {
+            status: qrcodeStatus.status,
+            statusText: qrcodeStatus.statusText,
+            authorization: null,
         });
+
+        res.success();
     } catch (error) {
-        console.error("[ScanQrcode] Error:", error);
-        res.status(500).json({
-            meta: {
-                code: "1024-E01",
-                message: error.message || "Network error: Backend service unavailable",
-            },
-        });
+        res.error(error.message || "Network error: Backend service unavailable");
     }
 };
 
@@ -375,22 +234,12 @@ const authorizeQrcode = async (req, res) => {
         const { qrcodeId, userId } = req.body;
 
         if (!qrcodeId || !userId) {
-            return res.status(400).json({
-                meta: {
-                    code: "1024-C01",
-                    message: "Invalid request data: qrcodeId and userId are required",
-                },
-            });
+            return res.error("Invalid request data: qrcodeId and userId are required", "1024-C01", 400);
         }
 
         // 检查Redis是否可用
         if (!checkRedisAvailable()) {
-            return res.status(503).json({
-                meta: {
-                    code: "1024-E01",
-                    message: "Redis未连接，服务不可用",
-                },
-            });
+            return res.error("Redis未连接，服务不可用", "1024-E01", 503);
         }
 
         const redis = getRedis();
@@ -398,12 +247,7 @@ const authorizeQrcode = async (req, res) => {
         const statusStr = await redis.get(key);
 
         if (!statusStr) {
-            return res.status(404).json({
-                meta: {
-                    code: "1024-B01",
-                    message: "Qrcode not found",
-                },
-            });
+            return res.error("Qrcode not found", "1024-B01", 404);
         }
 
         const qrcodeStatus = JSON.parse(statusStr);
@@ -412,12 +256,7 @@ const authorizeQrcode = async (req, res) => {
 
         // 检查二维码状态是否为已过期
         if (qrcodeStatus.status === "expired") {
-            return res.status(400).json({
-                meta: {
-                    code: "1024-C03",
-                    message: "Qrcode expired",
-                },
-            });
+            return res.error("Qrcode expired", "1024-C03", 400);
         }
 
         // 检查是否过期（根据创建时间判断）
@@ -429,53 +268,47 @@ const authorizeQrcode = async (req, res) => {
             await redis.persist(key);
             await redis.setEx(key, 600, JSON.stringify(qrcodeStatus));
 
-            return res.status(400).json({
-                meta: {
-                    code: "1024-C03",
-                    message: "Qrcode expired",
-                },
-            });
+            return res.error("Qrcode expired", "1024-C03", 400);
         }
 
         if (qrcodeStatus.status !== "scanned") {
-            return res.status(400).json({
-                meta: {
-                    code: "1024-C02",
-                    message: "Qrcode status is not scanned",
-                },
-            });
+            return res.error("Qrcode status is not scanned", "1024-C02", 400);
         }
 
         // 更新状态为已认证，保存userId和authorization
+        // 获取员工信息以获取部门（权限）
+        const Staff = require("../models/Staff");
+        const staff = await Staff.findById(userId).populate("department");
+        const permission = staff && staff.department ? staff.department.name : "CEO";
+
+        // 生成真正的 JWT token（包含 userID 和 permission）
+        const { generateToken } = require("../utils/generateToken");
+        const token = generateToken(userId, permission);
+
         qrcodeStatus.status = "authorized";
         qrcodeStatus.statusText = "已认证，正在登录...";
         qrcodeStatus.userId = userId;
-        qrcodeStatus.authorization = userId; // authorization就是userId
+        qrcodeStatus.authorization = token; // authorization是JWT token字符串
         qrcodeStatus.authorizedAt = Date.now();
 
         // 更新到Redis，保留1小时（3600秒）用于日志和调试
         await redis.setEx(key, 3600, JSON.stringify(qrcodeStatus));
 
-        res.json({
-            meta: {
-                code: "1024-S200",
-                message: "Success",
-            },
+        // 通过 WebSocket 推送状态变更
+        broadcastQrcodeStatus(qrcodeId, {
+            status: qrcodeStatus.status,
+            statusText: qrcodeStatus.statusText,
+            authorization: qrcodeStatus.authorization,
         });
+
+        res.success();
     } catch (error) {
-        console.error("[AuthorizeQrcode] Error:", error);
-        res.status(500).json({
-            meta: {
-                code: "1024-E01",
-                message: error.message || "Network error: Backend service unavailable",
-            },
-        });
+        res.error(error.message || "Network error: Backend service unavailable");
     }
 };
 
 module.exports = {
     generateQrcode,
-    checkQrcodeStatus,
     scanQrcode,
     authorizeQrcode,
 };

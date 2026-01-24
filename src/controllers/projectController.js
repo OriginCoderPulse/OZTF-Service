@@ -25,12 +25,7 @@ const getProjectDetail = async (req, res) => {
     const { project_id, user_id } = req.body;
 
     if (!project_id || !user_id) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Field validation failed",
-        },
-      });
+      return res.error("Invalid request data: Field validation failed", "1024-C01", 400);
     }
 
     const projectId = mongoose.Types.ObjectId.isValid(project_id)
@@ -39,12 +34,7 @@ const getProjectDetail = async (req, res) => {
     // 使用 lean() 减少 Mongoose 文档包装开销
     const project = await Project.findById(projectId).lean();
     if (!project) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Project not found",
-        },
-      });
+      return res.error("Project not found", "1024-C01", 404);
     }
 
     // 获取项目成员（lean + 不使用 populate，减少多余查询）
@@ -103,12 +93,7 @@ const getProjectDetail = async (req, res) => {
       }
     }
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
+    res.success({
         id: project._id.toString(),
         name: project.name,
         status: project.status,
@@ -125,16 +110,9 @@ const getProjectDetail = async (req, res) => {
         is_tester: isTester,
         project_feature_role: projectFeatureRole,
         project_qa_role: projectQARole,
-      },
     });
   } catch (error) {
-    console.error("Get project detail error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -162,12 +140,7 @@ const addProject = async (req, res) => {
     const { name, start_date, end_date, priority, manager_id, members } = req.body;
 
     if (!name || !start_date || !end_date || !priority || !manager_id) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Field validation failed",
-        },
-      });
+      return res.error("Invalid request data: Field validation failed", "1024-C01", 400);
     }
 
     // 获取项目经理信息
@@ -176,12 +149,7 @@ const addProject = async (req, res) => {
       : manager_id;
     const manager = await Staff.findById(managerId).populate("department");
     if (!manager) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Manager not found",
-        },
-      });
+      return res.error("Manager not found", "1024-C01", 404);
     }
 
     // 创建项目
@@ -233,24 +201,12 @@ const addProject = async (req, res) => {
       await Promise.all(memberPromises);
     }
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
+    res.success({
         id: project._id.toString(),
         name: project.name,
-      },
     });
   } catch (error) {
-    console.error("Add project error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -273,12 +229,7 @@ const getProjectRole = async (req, res) => {
     const { uid, project_id } = req.body;
 
     if (!uid || !project_id) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Field validation failed",
-        },
-      });
+      return res.error("Invalid request data: Field validation failed", "1024-C01", 400);
     }
 
     const projectId = mongoose.Types.ObjectId.isValid(project_id)
@@ -289,35 +240,18 @@ const getProjectRole = async (req, res) => {
     // 查询项目
     const project = await Project.findById(projectId).lean();
     if (!project) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Project not found",
-        },
-      });
+      return res.error("Project not found", "1024-C01", 404);
     }
 
     // 判断用户是否是项目负责人
     const isManager = project.managerId.toString() === userId.toString();
     const projectRole = isManager ? "M" : "D";
 
-    res.json({
-      meta: {
-        code: "1024-S200",
-        message: "Success",
-      },
-      data: {
+    res.success({
         projectRole,
-      },
     });
   } catch (error) {
-    console.error("Get project role error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
@@ -335,12 +269,7 @@ const exportProjectFeatures = async (req, res) => {
     const { projectId } = req.body;
 
     if (!projectId) {
-      return res.status(400).json({
-        meta: {
-          code: "1024-C01",
-          message: "Invalid request data: Field validation failed",
-        },
-      });
+      return res.error("Invalid request data: Field validation failed", "1024-C01", 400);
     }
 
     const projectIdObj = mongoose.Types.ObjectId.isValid(projectId)
@@ -350,12 +279,7 @@ const exportProjectFeatures = async (req, res) => {
     // 查询项目信息
     const project = await Project.findById(projectIdObj).lean();
     if (!project) {
-      return res.status(404).json({
-        meta: {
-          code: "1024-C01",
-          message: "Project not found",
-        },
-      });
+      return res.error("Project not found", "1024-C01", 404);
     }
 
     // 查询所有功能列表
@@ -448,31 +372,19 @@ const exportProjectFeatures = async (req, res) => {
     });
 
     fileStream.on("error", (error) => {
-      console.error("文件流错误:", error);
       // 即使出错也尝试删除文件
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
       if (!res.headersSent) {
-        res.status(500).json({
-          meta: {
-            code: "1024-E01",
-            message: "Network error: Backend service unavailable",
-          },
-        });
+        res.error();
       }
     });
 
     // 将文件流管道到响应
     fileStream.pipe(res);
   } catch (error) {
-    console.error("Export project features error:", error);
-    res.status(500).json({
-      meta: {
-        code: "1024-E01",
-        message: "Network error: Backend service unavailable",
-      },
-    });
+    res.error();
   }
 };
 
