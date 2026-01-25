@@ -2,7 +2,7 @@ const QRCode = require("qrcode");
 const crypto = require("crypto");
 const schedule = require("node-schedule");
 const { getRedisClient, checkRedisAvailable } = require("../config/redis");
-const { broadcastQrcodeStatus } = require("../utils/qrcodeWebSocket");
+const { broadcastQrcodeStatus } = require("../utils/webSocket");
 
 // Redis key前缀
 const QRCODE_KEY_PREFIX = "qrcode:";
@@ -123,7 +123,7 @@ const generateQrcode = async (req, res) => {
                             await redis.persist(key);
                             await redis.setEx(key, 600, JSON.stringify(status)); // 再设置10分钟，由清理任务删除
 
-                            // 通过 WebSocket 推送过期状态
+                            // 通过 WebSocket 推送过期状态（同时广播到Web端和PC端）
                             broadcastQrcodeStatus(qrcodeId, {
                                 status: status.status,
                                 statusText: status.statusText,
@@ -182,6 +182,7 @@ const scanQrcode = async (req, res) => {
         }
 
         const qrcodeStatus = JSON.parse(statusStr);
+        
         const now = Date.now();
         const expiredThreshold = 3 * 60 * 1000; // 3分钟过期时间
 
@@ -202,12 +203,15 @@ const scanQrcode = async (req, res) => {
         // 更新到Redis，保留1小时（3600秒）用于日志和调试
         await redis.setEx(key, 3600, JSON.stringify(qrcodeStatus));
 
-        // 通过 WebSocket 推送状态变更
-        broadcastQrcodeStatus(qrcodeId, {
-            status: qrcodeStatus.status,
-            statusText: qrcodeStatus.statusText,
-            authorization: null,
-        });
+        // 通过 WebSocket 推送状态变更（同时广播到Web端和PC端）
+        try {
+            broadcastQrcodeStatus(qrcodeId, {
+                status: qrcodeStatus.status,
+                statusText: qrcodeStatus.statusText,
+                authorization: null,
+            });
+        } catch (error) {
+        }
 
         res.success();
     } catch (error) {
@@ -294,12 +298,15 @@ const authorizeQrcode = async (req, res) => {
         // 更新到Redis，保留1小时（3600秒）用于日志和调试
         await redis.setEx(key, 3600, JSON.stringify(qrcodeStatus));
 
-        // 通过 WebSocket 推送状态变更
-        broadcastQrcodeStatus(qrcodeId, {
-            status: qrcodeStatus.status,
-            statusText: qrcodeStatus.statusText,
-            authorization: qrcodeStatus.authorization,
-        });
+        // 通过 WebSocket 推送状态变更（同时广播到Web端和PC端）
+        try {
+            broadcastQrcodeStatus(qrcodeId, {
+                status: qrcodeStatus.status,
+                statusText: qrcodeStatus.statusText,
+                authorization: qrcodeStatus.authorization,
+            });
+        } catch (error) {
+        }
 
         res.success();
     } catch (error) {

@@ -34,7 +34,6 @@ const connectRedis = async () => {
         });
 
         redisClient.on("ready", () => {
-            console.log("✅ Redis 连接成功");
             isRedisAvailable = true;
         });
 

@@ -7,8 +7,7 @@ const connectDB = require("./config/database");
 const { connectRedis } = require("./config/redis");
 const { initializeScheduledTasks } = require("./utils/meetStatusScheduler");
 const { initializeCleanupTask } = require("./utils/qrcodeCleanupScheduler");
-const { initializeQrcodeWebSocket } = require("./utils/qrcodeWebSocket");
-const { initializeMeetWebSocket } = require("./utils/meetWebSocket");
+const { initializeWebSocket } = require("./utils/webSocket");
 const requestLogger = require("./middleware/requestLogger");
 const responseTemplate = require("./middleware/responseTemplate");
 require("dotenv").config();
@@ -46,8 +45,6 @@ function validateEnvironmentVariables() {
   if (invalidVars.length > 0) {
     process.exit(1);
   }
-
-  console.log("✅ 环境变量验证通过");
 }
 
 // 启动时验证环境变量
@@ -67,11 +64,8 @@ const io = new Server(httpServer, {
   allowEIO3: true,
 });
 
-// 初始化二维码 WebSocket 服务
-initializeQrcodeWebSocket(io);
-
-// 初始化会议 WebSocket 服务
-initializeMeetWebSocket(io);
+// 初始化统一 WebSocket 服务（处理所有命名空间）
+initializeWebSocket(io);
 
 // 信任代理（用于正确获取客户端真实 IP）
 app.set("trust proxy", true);
@@ -129,8 +123,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 1024;
 
 httpServer.listen(PORT, () => {
-  console.log(`✅ OZTF-Service 服务已启动`);
-  console.log(`✅ WebSocket 服务已启动`);
 });
 
 module.exports = { app, io };

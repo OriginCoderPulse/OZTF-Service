@@ -105,21 +105,23 @@ const runGlobalTimer = async () => {
 
   // 如果有状态变更，批量发送 WebSocket 消息
   if (changes.length > 0) {
+    const statusData = {
+      changes: changes, // 发送所有变更的数组
+      count: changes.length,
+    };
+
     // 延迟加载，避免循环依赖
     if (!broadcastMeetStatusChange) {
       try {
-        const { broadcastMeetStatusChange: broadcastFn } = require("./meetWebSocket");
+        const { broadcastMeetStatusChange: broadcastFn } = require("./webSocket");
         broadcastMeetStatusChange = broadcastFn;
       } catch (error) {
       }
     }
 
+    // 广播到Web端和PC端（默认同时发送到两个命名空间）
     if (broadcastMeetStatusChange) {
-      // 批量发送所有状态变更
-      broadcastMeetStatusChange({
-        changes: changes, // 发送所有变更的数组
-        count: changes.length,
-      });
+      broadcastMeetStatusChange(statusData);
     }
   }
 };

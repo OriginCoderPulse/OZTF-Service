@@ -12,7 +12,6 @@ const connectDB = async () => {
       useUnifiedTopology: true,
     });
 
-    console.log("✅ MongoDB 连接成功");
     return Promise.resolve();
   } catch (error) {
     process.exit(1);
