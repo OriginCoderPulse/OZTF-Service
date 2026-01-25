@@ -69,8 +69,8 @@ const findAndValidateStaff = async (uid) => {
 };
 
 /**
- * 获取员工的所有权限（去重并按order排序）
- * PC端：考勤权限放在倒数第二个位置
+ * 获取员工的所有权限（按固定顺序排序）
+ * 固定顺序：Home Project Staff Finance Meet Video Attendance DashBoard
  */
 const getStaffPermissions = async (departmentId) => {
   // 获取部门权限关联
@@ -81,22 +81,29 @@ const getStaffPermissions = async (departmentId) => {
   // 获取所有唯一的权限ID
   const permissionIds = [...new Set(departmentPermissions.map((dp) => dp.permissionId))];
 
-  // 获取权限详情并按order排序
+  // 获取权限详情
   const permissions = await Permission.find({
     _id: { $in: permissionIds },
-  })
-    .sort({ order: 1 })
-    .lean();
+  }).lean();
 
-  // PC端：将考勤权限移到倒数第二个位置
-  const attendanceIndex = permissions.findIndex((p) => p.name === "Attendance");
-  if (attendanceIndex !== -1 && permissions.length > 1) {
-    // 移除考勤权限
-    const attendance = permissions.splice(attendanceIndex, 1)[0];
-    // 插入到倒数第二个位置
-    const insertIndex = Math.max(0, permissions.length - 1);
-    permissions.splice(insertIndex, 0, attendance);
-  }
+  // 定义固定顺序
+  const orderMap = {
+    Home: 1,
+    Project: 2,
+    Staff: 3,
+    Finance: 4,
+    Meet: 5,
+    Video: 6,
+    Attendance: 7,
+    DashBoard: 8,
+  };
+
+  // 按照固定顺序排序
+  permissions.sort((a, b) => {
+    const orderA = orderMap[a.name] || 999; // 未定义的权限放在最后
+    const orderB = orderMap[b.name] || 999;
+    return orderA - orderB;
+  });
 
   return permissions;
 };
@@ -281,7 +288,7 @@ const getUserProjects = async (staff, isSuper) => {
 
 /**
  * 根据角色获取app端权限列表
- * App端：考勤权限放在第二个位置
+ * App端：Attendance 放在第二个位置，其他权限按固定顺序排序
  */
 const getAppPermissionsByRole = async (departmentName) => {
   // 定义角色对应的权限名称（不包含 Attendance，后面单独添加）
@@ -293,15 +300,32 @@ const getAppPermissionsByRole = async (departmentName) => {
     Product: ["Home", "Project"],
   };
 
-  // 获取该角色需要的权限名称列表
+  // 获取该角色需要的权限名称列表（不包含 Attendance）
   const permissionNames = rolePermissions[departmentName] || ["Home"];
 
   // 从数据库查询这些权限的详细信息
   const permissions = await Permission.find({
     name: { $in: permissionNames },
-  })
-    .sort({ order: 1 })
-    .lean();
+  }).lean();
+
+  // 定义固定顺序（用于排序非 Attendance 权限）
+  const orderMap = {
+    Home: 1,
+    Project: 2,
+    Staff: 3,
+    Finance: 4,
+    Meet: 5,
+    Video: 6,
+    Attendance: 7,
+    DashBoard: 8,
+  };
+
+  // 按照固定顺序排序（排除 Attendance）
+  permissions.sort((a, b) => {
+    const orderA = orderMap[a.name] || 999;
+    const orderB = orderMap[b.name] || 999;
+    return orderA - orderB;
+  });
 
   // 获取考勤权限
   const attendancePermission = await Permission.findOne({
@@ -310,12 +334,9 @@ const getAppPermissionsByRole = async (departmentName) => {
 
   // App端：将考勤权限插入到第二个位置
   if (attendancePermission) {
-    // 确保考勤权限在第二个位置
-    if (permissions.length >= 2) {
+    if (permissions.length >= 1) {
+      // 如果有权限，插入到第二个位置（索引1）
       permissions.splice(1, 0, attendancePermission);
-    } else if (permissions.length === 1) {
-      // 如果只有一个权限，考勤放在第二个
-      permissions.push(attendancePermission);
     } else {
       // 如果没有权限，考勤放在第一个
       permissions.push(attendancePermission);
