@@ -1,3 +1,4 @@
+require("../models/Department");
 const Staff = require("../models/Staff");
 const Permission = require("../models/Permission");
 const DepartmentPermission = require("../models/DepartmentPermission");
@@ -449,7 +450,7 @@ const initial = async (req, res) => {
       ]);
 
       // 构建TabItem结构
-        responseData.permissions = buildTabItems(permissions, userProjects, 'pc');
+      responseData.permissions = buildTabItems(permissions, userProjects, 'pc');
     }
 
     // App端：根据角色返回对应的权限列表
@@ -466,7 +467,7 @@ const initial = async (req, res) => {
       }
 
       // 构建TabItem结构
-        responseData.permissions = buildTabItems(permissions, userProjects, 'app');
+      responseData.permissions = buildTabItems(permissions, userProjects, 'app');
     }
 
     // 设置响应头，禁用缓存
@@ -479,6 +480,7 @@ const initial = async (req, res) => {
     // 返回响应
     res.success(responseData);
   } catch (error) {
+    console.log(error)
     res.error();
   }
 };
