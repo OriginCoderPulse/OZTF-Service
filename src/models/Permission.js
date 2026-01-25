@@ -6,17 +6,12 @@ const permissionSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      enum: ["DashBoard", "Finance", "Home", "Meet", "Project", "Staff", "Video", "Attendance"],
+      enum: ["DashBoard", "Finance", "Home", "Meet", "Project", "Staff", "Video", "Attendance", "Approval"],
       index: true,
     },
     description: {
       type: String,
       default: "",
-    },
-    order: {
-      type: Number,
-      required: true,
-      unique: true,
     },
     icon: {
       type: mongoose.Schema.Types.Mixed, // 支持字符串或数组
@@ -37,6 +32,5 @@ const permissionSchema = new mongoose.Schema(
 );
 
 permissionSchema.index({ name: 1 }, { unique: true });
-permissionSchema.index({ order: 1 }, { unique: true });
 
 module.exports = mongoose.model("Permission", permissionSchema);

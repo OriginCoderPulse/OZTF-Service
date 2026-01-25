@@ -1,5 +1,4 @@
 const Staff = require("../models/Staff");
-const Department = require("../models/Department");
 const Permission = require("../models/Permission");
 const DepartmentPermission = require("../models/DepartmentPermission");
 const Project = require("../models/Project");
@@ -47,9 +46,6 @@ const findAndValidateStaff = async (uid) => {
   const staff = await Staff.findById(uid).populate("department");
 
   if (!staff) {
-    // 检查数据库中是否有任何员工数据
-    const totalStaff = await Staff.countDocuments();
-
     return {
       valid: false,
       error: {
@@ -70,7 +66,7 @@ const findAndValidateStaff = async (uid) => {
 
 /**
  * 获取员工的所有权限（按固定顺序排序）
- * 固定顺序：Home Project Staff Finance Meet Video Attendance DashBoard
+ * 固定顺序：Home Project Staff Approval Finance Meet Video Attendance DashBoard
  */
 const getStaffPermissions = async (departmentId) => {
   // 获取部门权限关联
@@ -86,16 +82,17 @@ const getStaffPermissions = async (departmentId) => {
     _id: { $in: permissionIds },
   }).lean();
 
-  // 定义固定顺序
+  // 定义固定顺序（PC端）
   const orderMap = {
     Home: 1,
     Project: 2,
     Staff: 3,
-    Finance: 4,
-    Meet: 5,
-    Video: 6,
-    Attendance: 7,
-    DashBoard: 8,
+    Approval: 4,
+    Finance: 5,
+    Meet: 6,
+    Video: 7,
+    Attendance: 8,
+    DashBoard: 9,
   };
 
   // 按照固定顺序排序
@@ -131,7 +128,7 @@ const formatPermissionIcon = (icon) => {
 /**
  * 根据职业获取utils列表
  */
-const getUtilsByOccupation = (occupation, isSuper, isProjectManager) => {
+const getUtilsByOccupation = (occupation, isCEO, isProjectManager) => {
   // 定义所有可用的utils及其icon
   const allUtils = {
     Manager: {
@@ -167,7 +164,7 @@ const getUtilsByOccupation = (occupation, isSuper, isProjectManager) => {
   };
 
   // 超级管理员或项目经理：返回所有
-  if (isSuper || isProjectManager) {
+  if (isCEO || isProjectManager) {
     return [allUtils.Manager, allUtils.Ops, allUtils.UI, allUtils.Intenlligence];
   }
 
@@ -204,7 +201,7 @@ const getUtilsByOccupation = (occupation, isSuper, isProjectManager) => {
 };
 
 /**
- * 格式化项目数据（Super角色）
+ * 格式化项目数据（CEO角色）
  */
 const formatProjectForSuper = (project, staff) => ({
   id: project._id.toString(),
@@ -235,9 +232,9 @@ const formatProjectForStaff = (project, member, staff) => {
 /**
  * 获取员工的项目列表
  */
-const getUserProjects = async (staff, isSuper) => {
-  if (isSuper) {
-    // Super返回所有项目
+const getUserProjects = async (staff, isCEO) => {
+  if (isCEO) {
+    // CEO返回所有项目
     const projects = await Project.find({}).sort({ createdAt: -1 }).lean();
     return projects.map((project) => formatProjectForSuper(project, staff));
   }
@@ -288,10 +285,11 @@ const getUserProjects = async (staff, isSuper) => {
 
 /**
  * 根据角色获取app端权限列表
- * App端：Attendance 放在第二个位置，其他权限按固定顺序排序
+ * App端：Attendance 放在第二个位置，Approval 放在第三个位置，其他权限按固定顺序排序
  */
 const getAppPermissionsByRole = async (departmentName) => {
-  // 定义角色对应的权限名称（不包含 Attendance，后面单独添加）
+  // 定义角色对应的权限名称（不包含 Attendance 和 Approval，后面单独添加）
+  // 注意：所有角色都有 Approval 权限，所以这里不包含它
   const rolePermissions = {
     CEO: ["Home", "Finance", "Project"],
     Finance: ["Home", "Finance"],
@@ -300,7 +298,7 @@ const getAppPermissionsByRole = async (departmentName) => {
     Product: ["Home", "Project"],
   };
 
-  // 获取该角色需要的权限名称列表（不包含 Attendance）
+  // 获取该角色需要的权限名称列表（不包含 Attendance 和 Approval）
   const permissionNames = rolePermissions[departmentName] || ["Home"];
 
   // 从数据库查询这些权限的详细信息
@@ -308,7 +306,7 @@ const getAppPermissionsByRole = async (departmentName) => {
     name: { $in: permissionNames },
   }).lean();
 
-  // 定义固定顺序（用于排序非 Attendance 权限）
+  // 定义固定顺序（用于排序非 Attendance 和 Approval 权限）
   const orderMap = {
     Home: 1,
     Project: 2,
@@ -318,9 +316,10 @@ const getAppPermissionsByRole = async (departmentName) => {
     Video: 6,
     Attendance: 7,
     DashBoard: 8,
+    Approval: 2, // 排序后在第二个位置，Attendance 插入后变成第三个
   };
 
-  // 按照固定顺序排序（排除 Attendance）
+  // 按照固定顺序排序（排除 Attendance 和 Approval）
   permissions.sort((a, b) => {
     const orderA = orderMap[a.name] || 999;
     const orderB = orderMap[b.name] || 999;
@@ -330,6 +329,11 @@ const getAppPermissionsByRole = async (departmentName) => {
   // 获取考勤权限
   const attendancePermission = await Permission.findOne({
     name: "Attendance",
+  }).lean();
+
+  // 获取审批权限
+  const approvalPermission = await Permission.findOne({
+    name: "Approval",
   }).lean();
 
   // App端：将考勤权限插入到第二个位置
@@ -343,11 +347,27 @@ const getAppPermissionsByRole = async (departmentName) => {
     }
   }
 
+  // App端：将审批权限插入到第三个位置（索引2）
+  if (approvalPermission) {
+    if (permissions.length >= 2) {
+      // 如果有至少两个权限，插入到第三个位置（索引2）
+      permissions.splice(2, 0, approvalPermission);
+    } else if (permissions.length === 1) {
+      // 如果只有一个权限，插入到第二个位置
+      permissions.splice(1, 0, approvalPermission);
+    } else {
+      // 如果没有权限，审批放在第一个
+      permissions.push(approvalPermission);
+    }
+  }
+
   return permissions;
 };
 
 /**
  * 构建TabItem结构
+ * @param {Array} permissions - 权限列表
+ * @param {Array} userProjects - 用户项目列表
  */
 const buildTabItems = (permissions, userProjects) => {
   return permissions.map((perm, index) => {
@@ -411,7 +431,7 @@ const initial = async (req, res) => {
     const departmentName = department.name;
 
     // 检查是否是CEO部门（超级管理员）
-    const isSuper = departmentName === "CEO";
+    const isCEO = departmentName === "CEO";
 
     // 判断设备类型：pc 返回完整数据（包含permissions），app 返回根据角色判断的permissions
     const isPC = device === "pc";
@@ -425,12 +445,11 @@ const initial = async (req, res) => {
       // 并行获取权限和项目列表
       const [permissions, userProjects] = await Promise.all([
         getStaffPermissions(departmentId),
-        getUserProjects(staff, isSuper),
+        getUserProjects(staff, isCEO),
       ]);
 
       // 构建TabItem结构
-      const tabItems = buildTabItems(permissions, userProjects);
-      responseData.permissions = tabItems;
+        responseData.permissions = buildTabItems(permissions, userProjects, 'pc');
     }
 
     // App端：根据角色返回对应的权限列表
@@ -443,12 +462,11 @@ const initial = async (req, res) => {
       let userProjects = [];
 
       if (needsProjects) {
-        userProjects = await getUserProjects(staff, isSuper);
+        userProjects = await getUserProjects(staff, isCEO);
       }
 
       // 构建TabItem结构
-      const tabItems = buildTabItems(permissions, userProjects);
-      responseData.permissions = tabItems;
+        responseData.permissions = buildTabItems(permissions, userProjects, 'app');
     }
 
     // 设置响应头，禁用缓存
