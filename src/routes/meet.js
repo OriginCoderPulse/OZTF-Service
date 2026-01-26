@@ -14,13 +14,13 @@ const {
   generateUserSigForMeeting,
 } = require("../controllers/meetController");
 
-router.post("/create-room", createRoom);
+router.put("/create-room", createRoom);
 router.post("/get-room", getRoom);
 router.post("/status-change", statusChange);
-router.post("/add-out-participant", addOutParticipant);
-router.post("/remove-out-participant", removeOutParticipant);
-router.post("/add-inner-participant", addInnerParticipant);
-router.post("/remove-inner-participant", removeInnerParticipant);
+router.put("/add-out-participant", addOutParticipant);
+router.delete("/remove-out-participant", removeOutParticipant);
+router.put("/add-inner-participant", addInnerParticipant);
+router.delete("/remove-inner-participant", removeInnerParticipant);
 router.post("/get-room-properties", getRoomProperties);
 router.post("/get-meeting-by-meetid", getMeetingByMeetId);
 router.post("/verify-password", verifyPassword);

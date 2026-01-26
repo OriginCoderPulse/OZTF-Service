@@ -7,6 +7,7 @@ const connectDB = require("./config/database");
 const { connectRedis } = require("./config/redis");
 const { initializeScheduledTasks } = require("./utils/meetStatusScheduler");
 const { initializeCleanupTask } = require("./utils/qrcodeCleanupScheduler");
+const { initializeAttendanceScheduler } = require("./utils/attendanceScheduler");
 const { initializeWebSocket } = require("./utils/webSocket");
 const requestLogger = require("./middleware/requestLogger");
 const responseTemplate = require("./middleware/responseTemplate");
@@ -89,6 +90,8 @@ app.use("/oztf/api/v1/static", express.static(path.join(__dirname, "../public/st
 connectDB().then(() => {
   // 数据库连接成功后初始化所有会议定时任务
   initializeScheduledTasks();
+  // 初始化考勤定时任务
+  initializeAttendanceScheduler();
 });
 
 // 连接Redis（可选，失败不影响应用启动）
@@ -108,6 +111,7 @@ app.use("/oztf/api/v1/feature", require("./routes/feature"));
 app.use("/oztf/api/v1/bug", require("./routes/bug"));
 app.use("/oztf/api/v1/meet", require("./routes/meet"));
 app.use("/oztf/api/v1/qrcode", require("./routes/qrcode"));
+app.use("/oztf/api/v1/attendance", require("./routes/attendance"));
 
 // 健康检查
 app.get("/health", (req, res) => {

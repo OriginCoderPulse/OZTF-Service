@@ -124,4 +124,24 @@ staffSchema.pre("save", async function (next) {
   next();
 });
 
+// 新增员工成功后，自动创建当天的考勤记录
+staffSchema.post("save", async function (doc, next) {
+  try {
+    // 判断是否为新增：检查 createdAt 和 updatedAt 是否相同或非常接近（1秒内）
+    const timeDiff = Math.abs(doc.createdAt.getTime() - doc.updatedAt.getTime());
+    const isNewRecord = timeDiff < 1000; // 1秒内的差异认为是新增
+
+    if (isNewRecord) {
+      const { createAttendanceRecordForStaff } = require("../utils/attendanceScheduler");
+      // 创建当天的考勤记录（异步执行，不阻塞）
+      createAttendanceRecordForStaff(doc._id).catch(() => {
+        // 静默处理错误，不影响员工创建流程
+      });
+    }
+  } catch (error) {
+    // 创建考勤记录失败不影响员工创建，只记录错误
+  }
+  next();
+});
+
 module.exports = mongoose.model("Staff", staffSchema);
