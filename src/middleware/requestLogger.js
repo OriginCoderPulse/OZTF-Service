@@ -63,18 +63,53 @@ const writeLogToFile = (logMessage) => {
 
 /**
  * 请求日志中间件
- * 格式: [Method][DateTime]-[Path]
+ * 格式: [Method][DateTime]-[Path] - [成功/失败]
+ * 失败时会在下面加上error信息
  */
 const requestLogger = (req, res, next) => {
   const method = req.method;
   const pathName = req.path;
   const dateTime = formatDateTime();
-  const logMessage = `[${method}][${dateTime}]-[${pathName}]`;
 
-  logger.info(logMessage);
+  // 监听响应完成事件
+  res.on("finish", () => {
+    const statusCode = res.statusCode;
+    const isSuccess = statusCode >= 200 && statusCode < 400;
+    const status = isSuccess ? "Success" : "Failed";
 
-  // 根据 OUTPUT_LOG 决定是否写入日志文件
-  writeLogToFile(logMessage);
+    let logMessage = `[${method}][${dateTime}]-[${pathName}] - ${status}`;
+
+    // 如果失败，添加错误信息
+    if (!isSuccess) {
+      const errorInfo = {
+        statusCode: statusCode,
+        statusMessage: res.statusMessage || "Unknown Error",
+      };
+      logMessage += `\nErrorMessage: ${JSON.stringify(errorInfo, null, 2)}`;
+    }
+
+    if (isSuccess) {
+      logger.info(logMessage);
+    } else {
+      logger.error(logMessage);
+    }
+
+    // 根据 OUTPUT_LOG 决定是否写入日志文件
+    writeLogToFile(logMessage);
+  });
+
+  // 监听错误事件
+  res.on("error", (error) => {
+    const status = "失败";
+    let logMessage = `[${method}][${dateTime}]-[${pathName}] - ${status}`;
+    logMessage += `\n错误信息: ${JSON.stringify({
+      error: error.message,
+      stack: error.stack,
+    }, null, 2)}`;
+
+    logger.error(logMessage);
+    writeLogToFile(logMessage);
+  });
 
   next();
 };
