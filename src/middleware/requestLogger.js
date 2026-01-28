@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const logger = require("../scripts/logger");
 
 // 环境变量解析工具，支持 true/false/1/0/yes/no 等
 const parseBool = (value, defaultValue = false) => {
@@ -69,6 +70,8 @@ const requestLogger = (req, res, next) => {
   const pathName = req.path;
   const dateTime = formatDateTime();
   const logMessage = `[${method}][${dateTime}]-[${pathName}]`;
+
+  logger.info(logMessage);
 
   // 根据 OUTPUT_LOG 决定是否写入日志文件
   writeLogToFile(logMessage);
