@@ -2,23 +2,3 @@ kind: pipeline
 name: default
 type: docker
 steps:
-  - name: build
-    image: docker.1ms.run/library/node:24.13.0
-    commands:
-      - npm install -g pnpm
-      - pnpm i
-  - name: scp_file
-    image: appleboy/drone-scp
-    settings:
-      host: 172.17.0.1
-      username: root
-      key:
-        from_secret: SSH_PRIVATE_KEY
-      source:
-        - ./*
-        - "!node_modules"  # 忽略 node_modules
-        - "!.git"
-        - "!.gitignore"
-        - "!.env"
-        - "!.env.*"
-      target: /www/wwwroot/service
