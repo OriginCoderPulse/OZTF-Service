@@ -1,9 +1,6 @@
 const fs = require("fs");
 const path = require("path");
 
-// 是否为开发环境（仅作为默认值使用）
-const isDev = process.env.NODE_ENV === "development";
-
 // 环境变量解析工具，支持 true/false/1/0/yes/no 等
 const parseBool = (value, defaultValue = false) => {
   if (value === undefined || value === null) return defaultValue;
@@ -13,11 +10,12 @@ const parseBool = (value, defaultValue = false) => {
   return defaultValue;
 };
 
-// 根据 env 控制是否输出日志文件、是否输出到控制台
-// 未配置时默认：开发环境开启，生产环境关闭（保持原有行为）
-const ENABLE_FILE_LOG = parseBool(process.env.OUTPUT_LOG, isDev);
-const ENABLE_CONSOLE_LOG = parseBool(process.env.SHOW_TERMINAL_CONSOLE, isDev);
+// 是否写入日志文件：仅由 OUTPUT_LOG 决定（不区分环境）
+const ENABLE_FILE_LOG = parseBool(process.env.OUTPUT_LOG, false);
+// 是否在控制台输出：仅由 SHOW_TERMINAL_CONSOLE 决定（不区分环境）
+const ENABLE_CONSOLE_LOG = parseBool(process.env.SHOW_TERMINAL_CONSOLE, true);
 
+// 日志目录：项目根目录下 logs
 const logDir = path.join(__dirname, "../../logs");
 
 // 确保日志目录存在（仅当需要写文件时）
@@ -100,15 +98,5 @@ const logger = {
     writeToFile(message);
   },
 };
-
-// 如果禁用控制台输出，则把原生 console 置空
-if (!ENABLE_CONSOLE_LOG) {
-  const noop = () => {};
-  console.log = noop;
-  console.info = noop;
-  console.warn = noop;
-  console.error = noop;
-  console.debug = noop;
-}
 
 module.exports = logger;

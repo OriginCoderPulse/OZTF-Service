@@ -16,7 +16,7 @@ const { initializeAttendanceScheduler } = require("./utils/attendanceScheduler")
 const { initializeWebSocket } = require("./utils/webSocket");
 const requestLogger = require("./middleware/requestLogger");
 const responseTemplate = require("./middleware/responseTemplate");
-const logger = require("./utils/logger");
+const logger = require("./scripts/logger");
 
 // 验证必要的环境变量
 function validateEnvironmentVariables() {
