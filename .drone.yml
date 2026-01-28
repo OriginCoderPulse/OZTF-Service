@@ -14,5 +14,11 @@ steps:
       username: root
       key:
         from_secret: SSH_PRIVATE_KEY
-      source: ./*
+      source:
+        - ./*
+        - "!node_modules"  # 忽略 node_modules
+        - "!.git"
+        - "!.gitignore"
+        - "!.env"
+        - "!.env.*"
       target: /www/wwwroot/service
