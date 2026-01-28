@@ -3,7 +3,7 @@ name: default
 type: docker
 steps:
   - name: build
-    image: docker.1ms.run/library/node:25.3.0
+    image: docker.1ms.run/library/node:24.13.0
     commands:
       - npm install --registry=https://registry.npmmirror.com
   - name: scp_file
@@ -15,4 +15,15 @@ steps:
         from_secret: SSH_PRIVATE_KEY
       source: ./*
       target: /www/wwwroot/service
+  - name: restart_service
+    image: appleboy/drone-ssh
+    settings:
+      host: 172.17.0.1
+      username: root
+      key:
+        from_secret: SSH_PRIVATE_KEY
+      script:
+        - echo 'stop'
+        - ps aux|grep service|grep -v auto|grep -v kill|grep -v grep|awk '{print $2}' |xargs kill -9
+        - bash /www/server/nodejs/vhost/scripts/service.sh
 
