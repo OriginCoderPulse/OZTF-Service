@@ -138,11 +138,9 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 1024;
-const isDev = process.env.NODE_ENV === "development";
 
 httpServer.listen(PORT, () => {
   logger.info(`服务器运行在端口 ${PORT}`);
-  logger.info(`环境: ${isDev ? "开发环境" : "生产环境"}`);
 });
 
 module.exports = { app, io };
