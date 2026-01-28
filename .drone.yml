@@ -2,3 +2,5 @@ kind: pipeline
 name: default
 type: docker
 steps:
+  clone:
+    path: /www/wwwroot/service
