@@ -93,7 +93,7 @@ app.use("/oztf/api/v1/static", express.static(path.join(__dirname, "../public/st
 
 // 连接数据库
 connectDB().then(() => {
-  logger.info("数据库连接成功");
+  logger.info("✅ 数据库连接成功");
   // 数据库连接成功后初始化所有会议定时任务
   initializeScheduledTasks();
   logger.info("会议定时任务已初始化");
