@@ -5,6 +5,7 @@ steps:
   - name: build
     image: docker.1ms.run/library/node:24.13.0
     commands:
+      - npm install -g pnpm
       - pnpm i
   - name: scp_file
     image: appleboy/drone-scp
