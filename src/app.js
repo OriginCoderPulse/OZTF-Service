@@ -109,7 +109,7 @@ connectDB().then(() => {
 connectRedis()
   .then(() => {
     // Redis连接成功后初始化二维码清理任务
-    initializeCleanupTasks();
+    initializeCleanupTask();
     logger.info("Redis连接成功，二维码清理任务已初始化");
   })
   .catch((err) => {
