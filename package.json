@@ -4,7 +4,6 @@
   "description": "后端管理系统服务",
   "main": "src/app.js",
   "scripts": {
-    "start": "node src/app.js",
     "dev": "nodemon src/app.js"
   },
   "keywords": [

@@ -1,3 +1,16 @@
+const { getRedisClient, checkRedisAvailable } = require("../config/redis");
+
+// 二维码状态存储（与 qrcodeController.js 保持一致）
+const QRCODE_KEY_PREFIX = "qrcode:";
+const getQrcodeKey = (qrcodeId) => `${QRCODE_KEY_PREFIX}${qrcodeId}`;
+
+// 简单的消息ID生成器（用于可靠投递）
+let globalMessageCounter = 0;
+const generateMessageId = () => {
+    globalMessageCounter = (globalMessageCounter + 1) % Number.MAX_SAFE_INTEGER;
+    return `msg_${Date.now()}_${globalMessageCounter}`;
+};
+
 /**
  * 统一 WebSocket 服务
  * 根据不同的命名空间处理不同的功能
@@ -11,6 +24,65 @@ const webConnections = new Set(); // Set<socket>
 // ========== /pc 命名空间相关 ==========
 const pcConnections = new Set(); // Set<socket>
 const pcQrcodeConnections = new Map(); // Map<qrcodeId, Set<socket>>
+
+/**
+ * 向指定 socket 发送「可靠消息」
+ * - 自动带上 messageId
+ * - 等待前端 ack(messageId)，否则最多重发 3 次
+ * @param {import("socket.io").Socket} socket
+ * @param {string} event
+ * @param {object} payload
+ */
+function sendReliableMessage(socket, event, payload) {
+    if (!socket) return;
+
+    // 为每个 socket 维护一份待确认消息表
+    if (!socket._pendingMessages) {
+        socket._pendingMessages = new Map(); // messageId -> { event, payload, retries, timer }
+    }
+
+    const messageId = generateMessageId();
+    const maxRetries = 3;
+    const retryInterval = 1000; // 1 秒
+
+    const sendOnce = () => {
+        if (!socket.connected) {
+            return;
+        }
+        socket.emit(event, {
+            messageId,
+            ...payload,
+        });
+    };
+
+    const scheduleRetry = () => {
+        const entry = socket._pendingMessages.get(messageId);
+        if (!entry) return;
+
+        if (!socket.connected || entry.retries >= maxRetries) {
+            // 超过重试次数或已断开，不再重发（业务可根据需要在此扩展离线存储）
+            socket._pendingMessages.delete(messageId);
+            return;
+        }
+
+        entry.retries += 1;
+        entry.timer = setTimeout(() => {
+            sendOnce();
+            scheduleRetry();
+        }, retryInterval);
+    };
+
+    // 记录待确认消息并发送第一次
+    socket._pendingMessages.set(messageId, {
+        event,
+        payload,
+        retries: 0,
+        timer: null,
+    });
+
+    sendOnce();
+    scheduleRetry();
+}
 
 /**
  * 初始化所有 WebSocket 服务
@@ -44,6 +116,19 @@ function initializeWebSocket(io) {
     pcNamespace.on('connection', (socket) => {
         pcConnections.add(socket);
 
+        // 初始化 ack 处理：前端收到消息后会发送 ack({ messageId })
+        socket.on('ack', (data) => {
+            const { messageId } = data || {};
+            if (!messageId || !socket._pendingMessages) return;
+            const entry = socket._pendingMessages.get(messageId);
+            if (entry) {
+                if (entry.timer) {
+                    clearTimeout(entry.timer);
+                }
+                socket._pendingMessages.delete(messageId);
+            }
+        });
+
         // 会议相关事件
         socket.on('subscribe:meet', () => {
             socket.subscribedMeet = true;
@@ -55,7 +140,7 @@ function initializeWebSocket(io) {
         });
 
         // 二维码相关事件
-        socket.on('subscribe:qrcode', (data) => {
+        socket.on('subscribe:qrcode', async (data) => {
             const { qrcodeId } = data;
             if (!qrcodeId) {
                 socket.emit('error', { message: 'qrcodeId is required' });
@@ -73,6 +158,27 @@ function initializeWebSocket(io) {
             socket.qrcodeIds.add(qrcodeId);
 
             socket.emit('subscribed:qrcode', { qrcodeId });
+
+            // 新增：订阅时立即下发当前二维码状态（如果 Redis 中存在）
+            try {
+                if (checkRedisAvailable()) {
+                    const redis = getRedisClient();
+                    const key = getQrcodeKey(qrcodeId);
+                    const statusStr = await redis.get(key);
+                    if (statusStr) {
+                        const status = JSON.parse(statusStr);
+                        // 使用可靠消息机制下发当前状态
+                        sendReliableMessage(socket, 'qrcodeStatus', {
+                            qrcodeId,
+                            status: status.status,
+                            statusText: status.statusText,
+                            authorization: status.authorization || null,
+                        });
+                    }
+                }
+            } catch (e) {
+                // 下发失败不影响正常订阅，不抛错
+            }
         });
 
         socket.on('unsubscribe:qrcode', (data) => {
@@ -140,7 +246,7 @@ function broadcastMeetStatusChange(statusData, namespaces = ['/web', '/pc']) {
     if (targetNamespaces.includes('/web')) {
         webConnections.forEach((socket) => {
             if (socket.subscribed) {
-                socket.emit('meetStatusChange', message);
+                sendReliableMessage(socket, 'meetStatusChange', message);
             }
         });
     }
@@ -174,7 +280,7 @@ function broadcastQrcodeStatus(qrcodeId, statusData, namespaces = ['/pc']) {
         if (pcQrcodeConnections.has(qrcodeId)) {
             const connections = pcQrcodeConnections.get(qrcodeId);
             connections.forEach((socket) => {
-                socket.emit('qrcodeStatus', message);
+                sendReliableMessage(socket, 'qrcodeStatus', message);
             });
         }
     }

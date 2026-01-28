@@ -3,6 +3,11 @@ const cors = require("cors");
 const path = require("path");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
+
+// 统一只加载项目根目录下的默认 .env 文件
+// （不再区分 .env.dev / .env.prod）
+require("dotenv").config();
+
 const connectDB = require("./config/database");
 const { connectRedis } = require("./config/redis");
 const { initializeScheduledTasks } = require("./utils/meetStatusScheduler");
@@ -11,7 +16,7 @@ const { initializeAttendanceScheduler } = require("./utils/attendanceScheduler")
 const { initializeWebSocket } = require("./utils/webSocket");
 const requestLogger = require("./middleware/requestLogger");
 const responseTemplate = require("./middleware/responseTemplate");
-require("dotenv").config();
+const logger = require("./utils/logger");
 
 // 验证必要的环境变量
 function validateEnvironmentVariables() {
@@ -88,10 +93,16 @@ app.use("/oztf/api/v1/static", express.static(path.join(__dirname, "../public/st
 
 // 连接数据库
 connectDB().then(() => {
+  logger.info("数据库连接成功");
   // 数据库连接成功后初始化所有会议定时任务
   initializeScheduledTasks();
+  logger.info("会议定时任务已初始化");
   // 初始化考勤定时任务
   initializeAttendanceScheduler();
+  logger.info("考勤定时任务已初始化");
+}).catch((err) => {
+  logger.error("数据库连接失败:", err.message);
+  process.exit(1);
 });
 
 // 连接Redis（可选，失败不影响应用启动）
@@ -99,8 +110,10 @@ connectRedis()
   .then(() => {
     // Redis连接成功后初始化二维码清理任务
     initializeCleanupTask();
+    logger.info("Redis连接成功，二维码清理任务已初始化");
   })
   .catch((err) => {
+    logger.warn("Redis连接失败，二维码功能将不可用:", err.message);
   });
 
 // 路由
@@ -125,8 +138,11 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 1024;
+const isDev = process.env.NODE_ENV === "development";
 
 httpServer.listen(PORT, () => {
+  logger.info(`服务器运行在端口 ${PORT}`);
+  logger.info(`环境: ${isDev ? "开发环境" : "生产环境"}`);
 });
 
 module.exports = { app, io };
