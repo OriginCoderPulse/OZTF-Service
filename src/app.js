@@ -127,7 +127,7 @@ app.use("/oztf/api/v1/qrcode", require("./routes/qrcode"));
 app.use("/oztf/api/v1/attendance", require("./routes/attendance"));
 
 // 健康检查
-app.get("/health", (req, res) => {
+app.get("/oztf/api/v1/health", (req, res) => {
   res.json({ status: "ok", message: "Service is running" });
 });
 
