@@ -1,0 +1,11 @@
+kind: pipeline
+name: default
+type: docker
+steps:
+  - name: build
+    image: docker.1ms.run/library/node:25.3.0
+    commands:
+      - env
+      - ls -alh
+      - npm install --registry=https://registry.npmmirror.com
+
