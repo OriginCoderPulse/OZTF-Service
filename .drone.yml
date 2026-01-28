@@ -1,5 +1,13 @@
 kind: pipeline
 name: default
 type: docker
-clone:
-  path: /www/wwwroot/service
+steps:
+  - name: scp_file
+    image: appleboy/drone-scp
+    settings:
+      host: 172.17.0.1
+      username: root
+      key:
+        from_secret: SSH_PRIVATE_KEY
+      source: ./*
+      target: /www/wwwroot/service
